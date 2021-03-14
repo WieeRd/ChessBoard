@@ -6,7 +6,7 @@ class LEDmatrix:
     def __init__(self):
         self.data = np.full((8,8), False)
  
-    def __str__(self) -> str:
+    def status(self) -> str:
         ret = ""
         for row in self.data:
             for col in row:
@@ -24,7 +24,7 @@ class Detector:
     def __init__(self):
         self.data = np.full((8,8), False)
 
-    def __str__(self) -> str:
+    def status(self) -> str:
         ret = ""
         for row in self.data:
             for col in row:
