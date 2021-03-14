@@ -1,0 +1,14 @@
+Minimum:
+8x8 LED (color: 2+)
+8x8 detector (most likely electrode)
+turn indicator LED
+reset/shutdown button
+
+Optional:
+1v1 / AI mode switch
+LCD, button(x2) on each side (pawn promo)
+
+links:
+https://tinkersphere.com/led-matrix-panels/359-full-color-rgb-led-matrix-panel-large-8x8.html
+https://www.instructables.com/Large-8x8-LED-Matrix-Display/
+https://juahnpop.tistory.com/189
