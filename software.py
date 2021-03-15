@@ -17,11 +17,11 @@ class Player:
 
 class Tile(Enum):
     '''Tile state (Enum type) '''
-    EMPTY = 0
-    PLACED = 1
-    MISSING = 2
-    MISPLACED = 3
-    SELECT = 4
+    EMPTY = 'E'
+    PLACED = 'P'
+    MISSING = 'M'
+    WRONG = 'W'
+    SELECT = 'S'
 
 def event(func):
     '''debugging purpose; monitor occured events'''
@@ -46,13 +46,15 @@ class Game:
         self.tiles = np.full((8,8), Tile.EMPTY)
 
     def status(self) -> str:
+        # TODO: Add tile state status
         sp_brd = str(self.board).split(sep='\n')
         sp_det = hw.detector.status().split(sep='\n')
         sp_blu = hw.blue.status().split(sep='\n')
         sp_red = hw.red.status().split(sep='\n')
         ret = ''
         for i in range(8):
-            ret += sp_brd[i] + '  ' + sp_det[i] + '  ' + sp_blu[i] + '  ' + sp_red[i] + '\n'
+            ret += sp_brd[i] + '  ' + sp_det[i] + '  ' + sp_blu[i] + '  ' + sp_red[i]
+            ret += '\n'
         return ret
 
     def play(self):
