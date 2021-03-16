@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import chess
 import numpy as np
-import hardware as hw
 import itertools as it
+
+import hardware as hw
 from enum import Enum
 from functools import wraps
 
@@ -17,8 +18,8 @@ class Player:
 
 class Tile(Enum):
     '''Tile state (Enum type) '''
-    EMPTY = 'E'
-    PLACED = 'P'
+    EMPTY = '.'
+    GROUND = 'G'
     MISSING = 'M'
     WRONG = 'W'
     SELECT = 'S'
@@ -27,7 +28,7 @@ def event(func):
     '''debugging purpose; monitor occured events'''
     @wraps(func)
     def ret(*args):
-        print(f"Event occured: {func.__name__}{args[1:]}")
+        print(f"Event : {func.__name__}{args[1:]}")
         return func(*args)
     return ret
 
@@ -43,22 +44,28 @@ class Game:
         self.ps_moves = ()
 
         self.board = chess.Board()
-        self.tiles = np.full((8,8), Tile.EMPTY)
+        self.tiles = np.array([
+            [Tile.GROUND]*8,
+            [Tile.GROUND]*8,
+            [Tile.EMPTY]*8,
+            [Tile.EMPTY]*8,
+            [Tile.EMPTY]*8,
+            [Tile.EMPTY]*8,
+            [Tile.GROUND]*8,
+            [Tile.GROUND]*8,
+        ])
 
     def TileStatus(self) -> str:
-        ret = ""
-        for row in self.tiles:
-            for col in row:
-                pass # AHHHHHHHHHH
+        return hw.gen_status_str(self.tiles, lambda x: x.value)
 
     def status(self) -> str:
-        # TODO: Add tile state status
         sp_brd = str(self.board).split(sep='\n')
         sp_det = hw.detector.status().split(sep='\n')
         sp_led = hw.LEDstatus().split(sep='\n')
+        sp_til = self.TileStatus().split(sep='\n')
         ret = ''
         for i in range(8):
-            ret += sp_brd[i] + '  ' + sp_det[7-i] + '  ' + sp_led[7-i]
+            ret += sp_det[7-i] + ' ' + sp_brd[i] + '  ' + sp_til[7-i] + ' ' + sp_led[7-i]
             ret += '\n'
         return ret
 
