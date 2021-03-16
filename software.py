@@ -45,15 +45,20 @@ class Game:
         self.board = chess.Board()
         self.tiles = np.full((8,8), Tile.EMPTY)
 
+    def TileStatus(self) -> str:
+        ret = ""
+        for row in self.tiles:
+            for col in row:
+                pass # AHHHHHHHHHH
+
     def status(self) -> str:
         # TODO: Add tile state status
         sp_brd = str(self.board).split(sep='\n')
         sp_det = hw.detector.status().split(sep='\n')
-        sp_blu = hw.blue.status().split(sep='\n')
-        sp_red = hw.red.status().split(sep='\n')
+        sp_led = hw.LEDstatus().split(sep='\n')
         ret = ''
         for i in range(8):
-            ret += sp_brd[i] + '  ' + sp_det[i] + '  ' + sp_blu[i] + '  ' + sp_red[i]
+            ret += sp_brd[i] + '  ' + sp_det[7-i] + '  ' + sp_led[7-i]
             ret += '\n'
         return ret
 

@@ -4,12 +4,21 @@ Deals with physical chessboard itself
 Provides interface to LED/Electrode 8x8 matrix
 """
 import numpy as np
-import gpiozero as gp
+# import gpiozero as gp
 
 class LEDmatrix:
     def __init__(self):
         self.data = np.full((8,8), False)
+
+    def __getitem__(self, key):
+        return self.data[key]
  
+    def on(self, x:int, y:int):
+        self.data[y][x] = True
+
+    def off(self, x:int, y:int):
+        self.data[y][x] = False
+
     def status(self) -> str:
         ret = ""
         for row in self.data:
@@ -18,12 +27,6 @@ class LEDmatrix:
                 ret += ' '
             ret += '\n'
         return ret
-
-    def on(self, x:int, y:int):
-        self.data[y][x] = True
-
-    def off(self, x:int, y:int):
-        self.data[y][x] = False
 
 class Electrode:
     def __init__(self):
@@ -56,3 +59,25 @@ class Electrode:
 red = LEDmatrix()
 blue = LEDmatrix()
 detector = Electrode()
+
+def LEDstatus() -> str:
+    '''
+    Returns string representation
+    of red/blue LED matrix
+    '''
+    ret = [[' ']*8]*8
+    for y in range(8):
+        for x in range(8):
+            if red[y][x]:
+                if blue[y][x]:
+                    ret[y][x] = 'P'
+                else:
+                    ret[y][x] = 'R'
+            else:
+                if blue[y][x]:
+                    ret[y][x] = 'B'
+                else:
+                    ret[y][x] = '.'
+        ret[y] = ' '.join(ret[y])
+    ret = '\n'.join(ret)
+    return ret
