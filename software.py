@@ -17,7 +17,7 @@ class Player:
         self.in_air = set()
 
 class Tile(Enum):
-    '''Tile state (Enum type) '''
+    "Tile state (Enum)"
     EMPTY = '.'
     GROUND = 'G'
     MISSING = 'M'
@@ -25,7 +25,7 @@ class Tile(Enum):
     SELECT = 'S'
 
 def event(func):
-    '''debugging purpose; monitor occured events'''
+    "Monitor occured events (Debugging purpose)"
     @wraps(func)
     def ret(*args):
         print(f"Event : {func.__name__}{args[1:]}")
@@ -41,6 +41,7 @@ class Game:
         self.errors = 0
 
         self.select = None
+        self.all_ps_moves = ()
         self.ps_moves = ()
 
         self.board = chess.Board()
@@ -84,11 +85,21 @@ class Game:
 
     @event
     def on_place(self, x:int, y:int):
-        pass
+        tile = self.tiles[y][x]
+        if   tile==Tile.EMPTY:
+            pass
+        elif tile==Tile.MISSING:
+            pass
+        elif tile==Tile.SELECT:
+            pass
 
     @event
     def on_lift(self, x:int, y:int):
-        pass
+        tile = self.tiles[y][x]
+        if   tile==Tile.GROUND:
+            pass
+        elif tile==Tile.WRONG:
+            pass
 
 match = Game()
 match.play()
