@@ -50,6 +50,7 @@ class Electrode:
         return self.data[key]
 
     def scan(self) -> np.ndarray:
+        # TODO: SAN support
         txt = input('>')
         try:
             cmd = txt[0]
