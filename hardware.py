@@ -3,6 +3,7 @@
 Deals with physical chessboard itself
 Provides interface to LED/Electrode 8x8 matrix
 """
+import chess
 import numpy as np
 # import gpiozero as gp
 from typing import Any, Callable
@@ -51,17 +52,19 @@ class Electrode:
 
     def scan(self) -> np.ndarray:
         # TODO: SAN support
-        txt = input('>')
+        txt = input('>').split()
         try:
             cmd = txt[0]
-            x, y = int(txt[1]), int(txt[2])
-        except:
-            print("WTF")
-        else:
-            if cmd=='l':
+            square = chess.parse_square(txt[1])
+            y, x = divmod(square, 8)
+            if cmd=='L':
                 self.data[y][x] = False 
-            elif cmd=='p':
+            elif cmd=='P':
                 self.data[y][x] = True
+            else:
+                raise ValueError
+        except:
+            print("Invalid command")
         finally:
             return self.data
 
