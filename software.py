@@ -84,10 +84,8 @@ class Game:
     @event
     def on_lift(self, x:int, y:int):
         tile = self.tiles[y][x]
-        if tile not in (Tile.GROUND, Tile.WRONG):
-            print(f"WTF: on_lift at {tile}")
-            exit(-1)
-        elif tile==Tile.GROUND:
+        assert tile in (Tile.GROUND, Tile.WRONG)
+        if tile==Tile.GROUND:
             color = self.color_at(x, y)
             self.in_air[color].add((x, y))
             if self.turn==color and len(self.in_air[color])==1:
@@ -100,10 +98,8 @@ class Game:
     @event
     def on_place(self, x:int, y:int):
         tile = self.tiles[y][x]
-        if tile not in (Tile.EMPTY, Tile.MISSING, Tile.SELECT):
-            print(f"WTF: on_place at {tile}")
-            exit(-1)
-        elif tile==Tile.EMPTY:
+        assert tile in (Tile.EMPTY, Tile.MISSING, Tile.SELECT)
+        if tile==Tile.EMPTY:
             if (x, y) in self.ps_moves:
                 self.on_move(x, y)
             else:
@@ -117,7 +113,7 @@ class Game:
                 else:
                     self.on_retrieve(x, y)
             elif tile==Tile.SELECT:
-                self.on_unselect(x, y)
+                self.on_unselect()
 
     @event
     def on_select(self, x, y):
@@ -131,7 +127,9 @@ class Game:
             hw.blue.on(x, y)
 
     @event
-    def on_unselect(self, x, y):
+    def on_unselect(self):
+        assert self.select!=None
+        x, y = self.select
         self.tiles[y][x] = Tile.GROUND
         for x, y in self.ps_moves:
             hw.blue.off(x, y)
@@ -139,10 +137,24 @@ class Game:
         self.ps_moves = ()
 
     @event
-    def on_missing(self, x, y): pass
+    def on_missing(self, x, y):
+        self.tiles[y][x] = Tile.MISSING
+        hw.red.on(x, y)
+        if self.select!=None and self.turn==self.color_at(x, y):
+            select = self.select
+            self.on_unselect()
+            self.on_missing(*select)
+
     @event
-    def on_retrieve(self, x, y): pass
-    
+    def on_retrieve(self, x, y):
+        self.tiles[y][x] = Tile.GROUND
+        hw.red.off(x, y)
+        color = self.color_at(x, y)
+        if self.turn==color and len(self.in_air[color])==1:
+            new_select = tuple(self.in_air[color])[0]
+            hw.red.off(*new_select)
+            self.on_select(*new_select)
+
     @event
     def on_misplace(self, x, y): pass
     @event
