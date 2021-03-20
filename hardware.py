@@ -47,7 +47,7 @@ class Electrode:
         return self.data[key]
 
     def scan(self) -> np.ndarray:
-        txt = input('>')
+        txt = input('> ')
         try:
             square = chess.parse_square(txt)
             y, x = divmod(square, 8)

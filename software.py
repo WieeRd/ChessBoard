@@ -11,7 +11,7 @@ from typing import Optional, Set, Tuple
 class Tile(Enum):
     "Tile state (Enum)"
     EMPTY = '.'
-    GROUND = '%'
+    GROUND = 'G'
     MISSING = 'M'
     WRONG = 'W'
     SELECT = 'S'
@@ -55,7 +55,7 @@ class Game:
         ret = ''
         for i in range(8):
             ret += str(8-i) + ' '
-            ret += '  '.join((sp_brd[i], sp_det[7-i], sp_til[7-i], sp_led[7-i]))
+            ret += '  '.join((sp_brd[i], sp_led[7-i], sp_det[7-i], sp_til[7-i]))
             ret += '\n'
         colorname = {0: 'Black', 1: 'White', None:'Pending'}
         ret += f"  a b c d e f g h  turn: {colorname[self.turn]}"
@@ -80,31 +80,11 @@ class Game:
             for y, x in it.product(range(8), range(8)):
                 if curr[y][x]!=prev[y][x]:
                     event_occured = True
-                    if prev[y][x]:
-                        self.on_lift(x, y)
-                    else:
+                    if curr[y][x]:
                         self.on_place(x, y)
+                    else:
+                        self.on_lift(x, y)
             prev = curr.copy()
-
-    @event
-    def switch_turn(self):
-        self.turn = not self.turn
-        hw.turnLED[self.turn].on()
-        hw.turnLED[not self.turn].off()
-
-    @event
-    def on_lift(self, x:int, y:int):
-        tile = self.tiles[y][x]
-        assert tile in (Tile.GROUND, Tile.WRONG)
-        if tile==Tile.GROUND:
-            color = self.color_at(x, y)
-            self.in_air[color].add((x, y))
-            if self.turn==color and len(self.in_air[color])==1:
-                self.on_select(x, y)
-            else:
-                self.on_missing(x, y)
-        elif tile==Tile.WRONG:
-            self.on_cleanup(x, y)
 
     @event
     def on_place(self, x:int, y:int):
@@ -125,6 +105,26 @@ class Game:
                     self.on_retrieve(x, y)
             elif tile==Tile.SELECT:
                 self.on_unselect()
+
+    @event
+    def on_lift(self, x:int, y:int):
+        tile = self.tiles[y][x]
+        assert tile in (Tile.GROUND, Tile.WRONG)
+        if tile==Tile.GROUND:
+            color = self.color_at(x, y)
+            self.in_air[color].add((x, y))
+            if self.turn==color and len(self.in_air[color])==1:
+                self.on_select(x, y)
+            else:
+                self.on_missing(x, y)
+        elif tile==Tile.WRONG:
+            self.on_cleanup(x, y)
+
+    @event
+    def switch_turn(self):
+        self.turn = not self.turn
+        hw.turnLED[self.turn].on()
+        hw.turnLED[not self.turn].off()
 
     @event
     def on_select(self, x, y):
@@ -168,6 +168,7 @@ class Game:
             hw.red.off(*new_select)
             self.on_select(*new_select)
         if self.pending and self.errors==0:
+            self.pending = False
             self.switch_turn()
 
     @event
@@ -182,12 +183,65 @@ class Game:
         self.errors -= 1
         hw.red.off(x, y)
         if self.pending and self.errors==0:
+            self.pending = False
             self.switch_turn()
 
     @event
-    def on_move(self, x, y): pass
-    @event
-    def on_kill(self, x, y): pass
+    def on_move(self, to_x, to_y):
+        assert self.select!=None and self.turn!=None
+        from_x, from_y = self.select
+        move = chess.Move(chess.square(from_x, from_y), chess.square(to_x, to_y))
+        piece = self.board.piece_at(chess.square(*self.select))
+        print(f"{move.uci()} ({piece.symbol()})")
 
+        self.in_air[self.turn].remove(self.select)
+        self.on_unselect()
+
+        self.tiles[to_y][to_x] = Tile.GROUND
+        self.tiles[from_y][from_x] = Tile.EMPTY
+
+        # Special move detection
+        if piece.piece_type==chess.PAWN:
+            if from_x!=to_x: # En passant
+                print("En passant detected")
+                self.on_misplace(to_x, from_y)
+                self.pending = True
+            elif to_y%7==0: # Promotion
+                print("Promotion detected")
+                move.promotion = chess.QUEEN
+        elif piece.piece_type==chess.KING:
+            dx = to_x - from_x
+            if abs(dx)>1: # Castling
+                print("Castling detected")
+                rook_init = 7 if dx>0 else 0, to_y
+                rook_after = to_x - dx//2, to_y
+                self.in_air[self.turn].add(rook_after)
+                self.on_misplace(*rook_init)
+                self.on_missing(*rook_after)
+                self.pending = True
+
+        if self.pending: print("Pending")
+        else: self.switch_turn()
+        self.board.push(move)
+
+    @event
+    def on_kill(self, to_x, to_y):
+        assert self.select!=None and self.turn!=None
+        from_x, from_y = self.select
+        move = chess.Move(chess.square(from_x, from_y), chess.square(to_x, to_y))
+        print(move.uci())
+
+        self.errors -= 1 # Missing -> Killed
+        hw.red.off(to_x, to_y)
+        self.in_air[self.turn].remove(self.select)
+        self.on_unselect()
+
+        self.tiles[to_y][to_x] = Tile.GROUND
+        self.tiles[from_y][from_x] = Tile.EMPTY
+
+        self.board.push(move)
+        self.switch_turn()
+
+# TODO: gameover, retart, type hints
 match = Game()
 match.play()
