@@ -47,17 +47,11 @@ class Electrode:
         return self.data[key]
 
     def scan(self) -> np.ndarray:
-        txt = input('>').split()
+        txt = input('>')
         try:
-            cmd = txt[0]
-            square = chess.parse_square(txt[1])
+            square = chess.parse_square(txt)
             y, x = divmod(square, 8)
-            if cmd=='L':
-                self.data[y][x] = False 
-            elif cmd=='P':
-                self.data[y][x] = True
-            else:
-                raise ValueError
+            self.data[y][x] = not self.data[y][x]
         except:
             print("Invalid command")
         finally:
@@ -89,10 +83,10 @@ def gen_color_char(red: bool, blue: bool) -> str:
             return '.' # Turned off
 
 def LEDstatus() -> str:
-    ret = ""
+    ret = []
     for y in range(8):
+        tmp = []
         for x in range(8):
-            ret += gen_color_char(red[y][x], blue[y][x])
-            ret += ' '
-        ret += '\n'
-    return ret
+            tmp.append(gen_color_char(red[y][x], blue[y][x]))
+        ret.append(' '.join(tmp))
+    return '\n'.join(ret)
