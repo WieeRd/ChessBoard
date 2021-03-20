@@ -9,14 +9,10 @@ import numpy as np
 from typing import Any, Callable
 
 def gen_status_str(data: np.ndarray, what: Callable[[Any], str]) -> str:
-    '''Generates str representation of 8x8 matrix data'''
-    ret = ""
+    ret = []
     for row in data:
-        for col in row:
-            ret += what(col)
-            ret += ' '
-        ret += '\n'
-    return ret
+        ret.append(' '.join(what(x) for x in row))
+    return '\n'.join(ret)
 
 class LEDmatrix:
     def __init__(self):
@@ -51,7 +47,6 @@ class Electrode:
         return self.data[key]
 
     def scan(self) -> np.ndarray:
-        # TODO: SAN support
         txt = input('>').split()
         try:
             cmd = txt[0]
@@ -71,9 +66,15 @@ class Electrode:
     def status(self) -> str:
         return gen_status_str(self.data, lambda x: '@' if x else '.')
 
+class fakeLED:
+    def __init__(self): self.state = False
+    def on(self): self.state = True
+    def off(self): self.state = False
+
 red = LEDmatrix()
 blue = LEDmatrix()
 detector = Electrode()
+turnLED = [fakeLED(), fakeLED()]
 
 def gen_color_char(red: bool, blue: bool) -> str:
     if red:

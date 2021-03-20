@@ -11,7 +11,7 @@ from typing import Optional, Set, Tuple
 class Tile(Enum):
     "Tile state (Enum)"
     EMPTY = '.'
-    GROUND = 'G'
+    GROUND = '%'
     MISSING = 'M'
     WRONG = 'W'
     SELECT = 'S'
@@ -26,8 +26,8 @@ def event(func):
 
 class Game:
     def __init__(self):
-        # color = turn%2; turn = (turn+1)%2
-        self.turn = 1 # 2 1 0 1 0 (white=1, black=0)
+        # turn = not turn
+        self.turn = None # None 1 0 1 0 (white=1, black=0)
         self.pending = True
         self.errors = 0
 
@@ -47,39 +47,50 @@ class Game:
             [Tile.GROUND]*8,
         ])
 
-    def TileStatus(self) -> str:
-        return hw.gen_status_str(self.tiles, lambda x: x.value)
-
     def status(self) -> str:
         sp_brd = str(self.board).split(sep='\n')
         sp_det = hw.detector.status().split(sep='\n')
         sp_led = hw.LEDstatus().split(sep='\n')
-        sp_til = self.TileStatus().split(sep='\n')
+        sp_til = hw.gen_status_str(self.tiles, lambda x: x.value).split(sep='\n')
         ret = ''
         for i in range(8):
             ret += str(8-i) + ' '
-            ret += sp_brd[i] + '  ' + sp_det[7-i] + ' ' + sp_til[7-i] + ' ' + sp_led[7-i]
+            ret += '  '.join((sp_brd[i], sp_det[7-i], sp_til[7-i], sp_led[7-i]))
             ret += '\n'
-        ret += '  a b c d e f g h\n'
+        colorname = {0: 'Black', 1: 'White', None:'Pending'}
+        ret += f"  a b c d e f g h  turn: {colorname[self.turn]}"
         return ret
 
     def color_at(self, x, y) -> chess.Color:
         # piece_at could return None, so have fun with AttributeError
         return self.board.piece_at(chess.square(x, y)).color
 
+    def prepare(self):
+        pass # not sure if I'll use pending for prepare stage or whole new func
+
     def play(self):
         # prev = hw.detector.scan().copy()
         prev = hw.detector.data.copy()
+        event_occured = True
         while True:
-            print(self.status())
+            if event_occured:
+                event_occured = False
+                print(self.status())
             curr = hw.detector.scan()
             for y, x in it.product(range(8), range(8)):
                 if curr[y][x]!=prev[y][x]:
+                    event_occured = True
                     if prev[y][x]:
                         self.on_lift(x, y)
                     else:
                         self.on_place(x, y)
             prev = curr.copy()
+
+    @event
+    def switch_turn(self):
+        self.turn = not self.turn
+        hw.turnLED[self.turn].on()
+        hw.turnLED[not self.turn].off()
 
     @event
     def on_lift(self, x:int, y:int):
@@ -139,6 +150,7 @@ class Game:
     @event
     def on_missing(self, x, y):
         self.tiles[y][x] = Tile.MISSING
+        self.errors += 1
         hw.red.on(x, y)
         if self.select!=None and self.turn==self.color_at(x, y):
             select = self.select
@@ -148,17 +160,29 @@ class Game:
     @event
     def on_retrieve(self, x, y):
         self.tiles[y][x] = Tile.GROUND
+        self.errors -= 1
         hw.red.off(x, y)
         color = self.color_at(x, y)
         if self.turn==color and len(self.in_air[color])==1:
             new_select = tuple(self.in_air[color])[0]
             hw.red.off(*new_select)
             self.on_select(*new_select)
+        if self.pending and self.errors==0:
+            self.switch_turn()
 
     @event
-    def on_misplace(self, x, y): pass
+    def on_misplace(self, x, y):
+        self.tiles[y][x] = Tile.WRONG
+        self.errors += 1
+        hw.red.on(x, y)
+
     @event
-    def on_cleanup(self, x, y): pass
+    def on_cleanup(self, x, y):
+        self.tiles[y][x] = Tile.EMPTY
+        self.errors -= 1
+        hw.red.off(x, y)
+        if self.pending and self.errors==0:
+            self.switch_turn()
 
     @event
     def on_move(self, x, y): pass
