@@ -26,8 +26,7 @@ def event(func):
 
 class Game:
     def __init__(self):
-        # turn = not turn
-        self.turn = None # None 1 0 1 0 (white=1, black=0)
+        self.turn = None
         self.pending = True
         self.errors = 0
 
@@ -61,7 +60,7 @@ class Game:
         ret += f"  a b c d e f g h  turn: {colorname[self.turn]}"
         return ret
 
-    def color_at(self, x, y) -> chess.Color:
+    def color_at(self, x:int, y:int) -> chess.Color:
         # piece_at could return None, so have fun with AttributeError
         return self.board.piece_at(chess.square(x, y)).color
 
@@ -127,7 +126,7 @@ class Game:
         hw.turnLED[not self.turn].off()
 
     @event
-    def on_select(self, x, y):
+    def on_select(self, x:int, y:int):
         self.tiles[y][x] = Tile.SELECT
         self.select = (x, y)
         func = lambda m: m.from_square==chess.square(x, y)
@@ -148,7 +147,7 @@ class Game:
         self.ps_moves = ()
 
     @event
-    def on_missing(self, x, y):
+    def on_missing(self, x:int, y:int):
         self.tiles[y][x] = Tile.MISSING
         self.errors += 1
         hw.red.on(x, y)
@@ -158,7 +157,7 @@ class Game:
             self.on_missing(*select)
 
     @event
-    def on_retrieve(self, x, y):
+    def on_retrieve(self, x:int, y:int):
         self.tiles[y][x] = Tile.GROUND
         self.errors -= 1
         hw.red.off(x, y)
@@ -172,13 +171,13 @@ class Game:
             self.switch_turn()
 
     @event
-    def on_misplace(self, x, y):
+    def on_misplace(self, x:int, y:int):
         self.tiles[y][x] = Tile.WRONG
         self.errors += 1
         hw.red.on(x, y)
 
     @event
-    def on_cleanup(self, x, y):
+    def on_cleanup(self, x:int, y:int):
         self.tiles[y][x] = Tile.EMPTY
         self.errors -= 1
         hw.red.off(x, y)
@@ -187,7 +186,7 @@ class Game:
             self.switch_turn()
 
     @event
-    def on_move(self, to_x, to_y):
+    def on_move(self, to_x:int, to_y:int):
         assert self.select!=None and self.turn!=None
         from_x, from_y = self.select
         move = chess.Move(chess.square(from_x, from_y), chess.square(to_x, to_y))
@@ -225,7 +224,7 @@ class Game:
         self.board.push(move)
 
     @event
-    def on_kill(self, to_x, to_y):
+    def on_kill(self, to_x:int, to_y:int):
         assert self.select!=None and self.turn!=None
         from_x, from_y = self.select
         move = chess.Move(chess.square(from_x, from_y), chess.square(to_x, to_y))
@@ -242,6 +241,6 @@ class Game:
         self.board.push(move)
         self.switch_turn()
 
-# TODO: gameover, retart, type hints
+# TODO: gameover, retart
 match = Game()
 match.play()
