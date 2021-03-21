@@ -68,7 +68,6 @@ class Game:
         pass # not sure if I'll use pending for prepare stage or whole new func
 
     def play(self):
-        # prev = hw.detector.scan().copy()
         prev = hw.detector.data.copy()
         event_occured = True
         while True:
@@ -84,6 +83,29 @@ class Game:
                     else:
                         self.on_lift(x, y)
             prev = curr.copy()
+
+    def test(self):
+        """ Manually invoke events (for debugging software itself) """
+        data = hw.detector.data
+        print(self.status())
+        while True:
+            txt = input(';) ')
+            i = 0
+            while len(txt)>i:
+                try:
+                    square = chess.parse_square(txt[i:i+2])
+                    y, x = divmod(square, 8)
+                    data[y][x] = not data[y][x]
+                    if data[y][x]: self.on_place(x, y)
+                    else: self.on_lift(x, y)
+                    print(self.status())
+                except ValueError:
+                    print(f"Invalid move: {txt[i:i+2]}")
+                    break
+                except IndexError:
+                    break
+                i += 2
+            print('='*80)
 
     @event
     def on_place(self, x:int, y:int):
@@ -243,4 +265,4 @@ class Game:
 
 # TODO: gameover, retart
 match = Game()
-match.play()
+match.test()

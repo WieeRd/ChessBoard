@@ -46,16 +46,8 @@ class Electrode:
     def __getitem__(self, key):
         return self.data[key]
 
-    def scan(self) -> np.ndarray:
-        txt = input('> ')
-        try:
-            square = chess.parse_square(txt)
-            y, x = divmod(square, 8)
-            self.data[y][x] = not self.data[y][x]
-        except:
-            print("Invalid command")
-        finally:
-            return self.data
+    def scan(self):
+        raise NotImplementedError
 
     def status(self) -> str:
         return gen_status_str(self.data, lambda x: '@' if x else '.')
