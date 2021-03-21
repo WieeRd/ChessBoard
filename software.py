@@ -45,6 +45,7 @@ class Game:
             [Tile.GROUND]*8,
             [Tile.GROUND]*8,
         ])
+        self.log = []
 
     def status(self) -> str:
         sp_brd = str(self.board).split(sep='\n')
@@ -56,8 +57,9 @@ class Game:
             ret += str(8-i) + ' '
             ret += '  '.join((sp_brd[i], sp_led[7-i], sp_det[7-i], sp_til[7-i]))
             ret += '\n'
-        colorname = {0: 'Black', 1: 'White', None:'Pending'}
-        ret += f"  a b c d e f g h  turn: {colorname[self.turn]}"
+        colorname = {0: 'B', 1: 'W', None:'P'}
+        ret += f"  a b c d e f g h  "
+        ret += f"T:{colorname[self.turn]} | P:{self.pending} | E:{self.errors} | aW:{len(self.in_air[1])}, aB:{len(self.in_air[0])}"
         return ret
 
     def color_at(self, x:int, y:int) -> chess.Color:
@@ -96,8 +98,11 @@ class Game:
                     square = chess.parse_square(txt[i:i+2])
                     y, x = divmod(square, 8)
                     data[y][x] = not data[y][x]
-                    if data[y][x]: self.on_place(x, y)
-                    else: self.on_lift(x, y)
+                    self.log.append(txt[i:i+2])
+                    if data[y][x]:
+                        self.on_place(x, y)
+                    else:
+                        self.on_lift(x, y)
                     print(self.status())
                 except ValueError:
                     print(f"Invalid move: {txt[i:i+2]}")
@@ -188,6 +193,7 @@ class Game:
             new_select = tuple(self.in_air[color])[0]
             hw.red.off(*new_select)
             self.on_select(*new_select)
+            self.errors -= 1 # gotcha! Pesky lil bug
         if self.pending and self.errors==0:
             self.pending = False
             self.switch_turn()
@@ -265,4 +271,6 @@ class Game:
 
 # TODO: gameover, retart
 match = Game()
-match.test()
+try: match.test()
+except KeyboardInterrupt:
+    print('\n' + ' '.join(match.log))
