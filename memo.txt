@@ -11,4 +11,5 @@ LCD, button(x2) on each side (pawn promo)
 links:
 https://tinkersphere.com/led-matrix-panels/359-full-color-rgb-led-matrix-panel-large-8x8.html
 https://www.instructables.com/Large-8x8-LED-Matrix-Display/
-https://juahnpop.tistory.com/189
+https://juahnpop.tistory.com/189  
+https://thesolaruniverse.wordpress.com/2016/05/26/a-five-8x8-dot-matrix-max7219-arduino-news-ticker-with-breadboard-power-supply/comment-page-1/
