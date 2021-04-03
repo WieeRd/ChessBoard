@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 import chess
 import numpy as np
-import itertools as it
 
 import hardware as hw
 from enum import Enum
 from functools import wraps
-from typing import Optional, Set, Tuple
+from typing import Tuple
 
 class Tile(Enum):
     "Tile state (Enum)"
@@ -19,98 +18,40 @@ class Tile(Enum):
 def event(func):
     "Monitor occured events (Debugging purpose)"
     @wraps(func)
-    def ret(*args):
-        print(f"Event : {func.__name__}{args[1:]}")
+    def ret(itself, *args):
+        print(f"Event : {func.__name__}{args}")
         return func(*args)
     return ret
 
-class Game:
-    def __init__(self):
+class ChessBoard:
+    def __init__(self, goodLED: hw.LEDmatrix, warnLED: hw.LEDmatrix, turnLED: Tuple[hw.LED, hw.LED]):
+        self.goodLED = goodLED
+        self.warnLED = warnLED
+        self.turnLED = turnLED
+
+        self.board = chess.Board()
+        self.tiles = np.array([
+            [Tile.MISSING]*8,
+            [Tile.MISSING]*8,
+            [Tile.EMPTY]*8,
+            [Tile.EMPTY]*8,
+            [Tile.EMPTY]*8,
+            [Tile.EMPTY]*8,
+            [Tile.MISSING]*8,
+            [Tile.MISSING]*8,
+        ])
+
         self.turn = None
         self.pending = True
         self.errors = 0
 
         self.in_air = [set(), set()]
-        self.select = None # position of selected piece
-        self.ps_moves = () # possible moves for selected piece
-
-        self.board = chess.Board()
-        self.tiles = np.array([
-            [Tile.GROUND]*8,
-            [Tile.GROUND]*8,
-            [Tile.EMPTY]*8,
-            [Tile.EMPTY]*8,
-            [Tile.EMPTY]*8,
-            [Tile.EMPTY]*8,
-            [Tile.GROUND]*8,
-            [Tile.GROUND]*8,
-        ])
-        self.log = []
-
-    def status(self) -> str:
-        sp_brd = str(self.board).split(sep='\n')
-        sp_det = hw.detector.status().split(sep='\n')
-        sp_led = hw.LEDstatus().split(sep='\n')
-        sp_til = hw.gen_status_str(self.tiles, lambda x: x.value).split(sep='\n')
-        ret = ''
-        for i in range(8):
-            ret += str(8-i) + ' '
-            ret += '  '.join((sp_brd[i], sp_led[7-i], sp_det[7-i], sp_til[7-i]))
-            ret += '\n'
-        colorname = {0: 'B', 1: 'W', None:'P'}
-        ret += f"  a b c d e f g h  "
-        ret += f"T:{colorname[self.turn]} | P:{self.pending} | E:{self.errors} | aW:{len(self.in_air[1])}, aB:{len(self.in_air[0])}"
-        return ret
+        self.select = None
+        self.ps_moves = ()
 
     def color_at(self, x:int, y:int) -> chess.Color:
         # piece_at could return None, so have fun with AttributeError
         return self.board.piece_at(chess.square(x, y)).color
-
-    def prepare(self):
-        pass # not sure if I'll use pending for prepare stage or whole new func
-
-    def play(self):
-        prev = hw.detector.data.copy()
-        event_occured = True
-        while True:
-            if event_occured:
-                event_occured = False
-                print(self.status())
-            curr = hw.detector.scan()
-            for y, x in it.product(range(8), range(8)):
-                if curr[y][x]!=prev[y][x]:
-                    event_occured = True
-                    if curr[y][x]:
-                        self.on_place(x, y)
-                    else:
-                        self.on_lift(x, y)
-            prev = curr.copy()
-
-    def test(self):
-        """ Manually invoke events (for debugging software itself) """
-        data = hw.detector.data
-        print(self.status())
-        while True:
-            txt = input(';) ')
-            i = 0
-            while len(txt)>i:
-                try:
-                    square = chess.parse_square(txt[i:i+2])
-                    y, x = divmod(square, 8)
-                    data[y][x] = not data[y][x]
-                    self.log.append(txt[i:i+2])
-                    if data[y][x]:
-                        self.on_place(x, y)
-                    else:
-                        self.on_lift(x, y)
-                    print(self.status())
-                except ValueError:
-                    print(f"Invalid move: {txt[i:i+2]}")
-                    break
-                except IndexError:
-                    break
-                i += 2
-            print('='*80)
 
     @event
     def on_place(self, x:int, y:int):
@@ -121,7 +62,7 @@ class Game:
                 self.on_move(x, y)
             else:
                 self.on_misplace(x, y)
-        else: # can know the owner of piece
+        else:
             color = self.color_at(x, y)
             self.in_air[color].remove((x, y))
             if tile==Tile.MISSING:
@@ -149,8 +90,8 @@ class Game:
     @event
     def switch_turn(self):
         self.turn = not self.turn
-        hw.turnLED[self.turn].on()
-        hw.turnLED[not self.turn].off()
+        self.turnLED[self.turn].on()
+        self.turnLED[not self.turn].off()
 
     @event
     def on_select(self, x:int, y:int):
@@ -161,7 +102,7 @@ class Game:
         tmp = (divmod(x.to_square, 8) for x in tmp)
         self.ps_moves = tuple((x, y) for y, x in tmp)
         for x, y in self.ps_moves:
-            hw.blue.on(x, y)
+            self.goodLED.on(x, y)
 
     @event
     def on_unselect(self):
@@ -169,7 +110,7 @@ class Game:
         x, y = self.select
         self.tiles[y][x] = Tile.GROUND
         for x, y in self.ps_moves:
-            hw.blue.off(x, y)
+            self.goodLED.off(x, y)
         self.select = None
         self.ps_moves = ()
 
@@ -177,7 +118,7 @@ class Game:
     def on_missing(self, x:int, y:int):
         self.tiles[y][x] = Tile.MISSING
         self.errors += 1
-        hw.red.on(x, y)
+        self.warnLED.on(x, y)
         if self.select!=None and self.turn==self.color_at(x, y):
             select = self.select
             self.on_unselect()
@@ -187,13 +128,16 @@ class Game:
     def on_retrieve(self, x:int, y:int):
         self.tiles[y][x] = Tile.GROUND
         self.errors -= 1
-        hw.red.off(x, y)
+        self.warnLED.off(x, y)
         color = self.color_at(x, y)
         if self.turn==color and len(self.in_air[color])==1:
+            # refresh newly selected square
             new_select = tuple(self.in_air[color])[0]
-            hw.red.off(*new_select)
-            self.on_select(*new_select)
-            self.errors -= 1 # gotcha! Pesky lil bug
+            self.on_place(*new_select)
+            self.on_lift(*new_select)
+            # self.warnLED.off(*new_select)
+            # self.on_select(*new_select)
+            # self.errors -= 1 # gotcha! Pesky lil bug
         if self.pending and self.errors==0:
             self.pending = False
             self.switch_turn()
@@ -202,13 +146,13 @@ class Game:
     def on_misplace(self, x:int, y:int):
         self.tiles[y][x] = Tile.WRONG
         self.errors += 1
-        hw.red.on(x, y)
+        self.warnLED.on(x, y)
 
     @event
     def on_cleanup(self, x:int, y:int):
         self.tiles[y][x] = Tile.EMPTY
         self.errors -= 1
-        hw.red.off(x, y)
+        self.warnLED.off(x, y)
         if self.pending and self.errors==0:
             self.pending = False
             self.switch_turn()
@@ -221,8 +165,9 @@ class Game:
         piece = self.board.piece_at(chess.square(*self.select))
         print(f"{move.uci()} ({piece.symbol()})")
 
-        self.in_air[self.turn].remove(self.select)
-        self.on_unselect()
+        self.on_place(*self.select) # cancel selection
+        # self.in_air[self.turn].remove(self.select)
+        # self.on_unselect()
 
         self.tiles[to_y][to_x] = Tile.GROUND
         self.tiles[from_y][from_x] = Tile.EMPTY
@@ -258,19 +203,55 @@ class Game:
         move = chess.Move(chess.square(from_x, from_y), chess.square(to_x, to_y))
         print(move.uci())
 
-        self.errors -= 1 # Missing -> Killed
-        hw.red.off(to_x, to_y)
-        self.in_air[self.turn].remove(self.select)
-        self.on_unselect()
+        self.on_place(to_x, to_y)
+        # self.errors -= 1 # Missing -> Killed
+        # self.warnLED.off(to_x, to_y)
+        # self.tiles[to_y][to_x] = Tile.GROUND
 
-        self.tiles[to_y][to_x] = Tile.GROUND
+        self.on_place(from_x, from_y)
+        # self.on_unselect()
+        # self.in_air[self.turn].remove((from_x, from_y))
         self.tiles[from_y][from_x] = Tile.EMPTY
 
         self.board.push(move)
         self.switch_turn()
 
-# TODO: gameover, retart
-match = Game()
-try: match.test()
-except KeyboardInterrupt:
-    print('\n' + ' '.join(match.log))
+def main():
+    red = hw.LEDmatrix()
+    blue = hw.LEDmatrix()
+    turn = ( hw.LED(), hw.LED() )
+    game = ChessBoard(blue, red, turn)
+    data = np.array([
+        [True]*8,
+        [True]*8,
+        [False]*8,
+        [False]*8,
+        [False]*8,
+        [False]*8,
+        [True]*8,
+        [True]*8,
+    ])
+    log = []
+
+    event_occured = True
+    while True:
+        txt = input(';) ')
+        i = 0
+        while len(txt)>i:
+            try:
+                square = chess.parse_square(txt[i:i+2])
+                y, x = divmod(square, 8)
+                data[y][x] = not data[y][x]
+                log.append(txt[i:i+2])
+                if data[y][x]:
+                    game.on_place(x, y)
+                else:
+                    game.on_lift(x, y)
+            except ValueError:
+                print(f"Invalid move: {txt[i:i+2]}")
+                break
+            except IndexError:
+                break
+            i += 2
+        print('='*80)
+
