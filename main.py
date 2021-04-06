@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import chess
+import chess.engine
+import asyncio
 import numpy as np
 import itertools as it
 
@@ -34,11 +36,13 @@ def game_status(game: sw.ChessBoard, scan_data: np.ndarray) -> str:
 
     return ret
 
-def test():
+async def test():
     red = hw.LEDmatrix()
     blue = hw.LEDmatrix()
     turn = ( hw.LED(), hw.LED() )
-    game = sw.ChessBoard(blue, red, turn)
+    transport, engine = await chess.engine.popen_uci("./stockfish")
+
+    game = sw.ChessBoard(blue, red, turn, engine)
     game.tiles = np.array([
         [sw.Tile.GROUND]*8,
         [sw.Tile.GROUND]*8,
@@ -62,45 +66,27 @@ def test():
         [True]*8,
     ])
 
-    try:
-        while True:
-            print(game_status(game, data))
+    while True:
+        print(game_status(game, data))
+        try:
             cmd = input(";) ")
-            try:
-                square = chess.parse_square(cmd)
-                y, x = divmod(square, 8)
-                data[y][x] = not data[y][x]
-                if data[y][x]:
-                    game.on_place(x, y)
-                else:
-                    game.on_lift(x, y)
-                log.append(chess.square_name(square))
-            except ValueError as e:
-                print(f"{type(e).__name__}: {e}")
-                print("Invalid command")
-                continue
-    except (KeyboardInterrupt, EOFError) as e:
-        return log
+            square = chess.parse_square(cmd)
+            y, x = divmod(square, 8)
+            data[y][x] = not data[y][x]
+            if data[y][x]:
+                await game.on_place(x, y)
+            else:
+                await game.on_lift(x, y)
+            log.append(chess.square_name(square))
+        except ValueError as e:
+            print(f"{type(e).__name__}: {e}")
+            print("Invalid command")
+            continue
+        except (KeyboardInterrupt, EOFError) as e:
+            break
+    return log
 
 if __name__=="__main__":
-    log = test()
+    loop = asyncio.get_event_loop()
+    log = loop.run_until_complete(test())
     print('\n'.join(log))
-
-"""
-def play(self):
-    prev = hw.detector.data.copy()
-    event_occured = True
-    while True:
-        if event_occured:
-            event_occured = False
-            print(self.status())
-        curr = hw.detector.scan()
-        for y, x in it.product(range(8), range(8)):
-            if curr[y][x]!=prev[y][x]:
-                event_occured = True
-                if curr[y][x]:
-                    self.on_place(x, y)
-                else:
-                    self.on_lift(x, y)
-        prev = curr.copy()
-"""
