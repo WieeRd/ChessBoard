@@ -3,7 +3,6 @@ import chess
 from chess import engine
 
 import asyncio
-import threading
 import numpy as np
 
 import hardware as hw
@@ -36,8 +35,9 @@ class ChessBoard:
         self.turnLED = turnLED
 
         self.engine = engine
-        self.timeout = timeout
-        self.AIselect = (0, 0)
+        if self.engine!=None:
+            self.timeout = timeout
+            self.AIselect = (0, 0)
 
         self.board = chess.Board()
         self.tiles = np.array([
@@ -73,21 +73,15 @@ class ChessBoard:
 
         if self.engine!=None:
             if self.turn==chess.BLACK: # AI's turn
-                self.turn = None
+                loop = asyncio.get_event_loop()
+                loop.create_task(self.run_engine())
             elif self.turn==chess.WHITE:
                 self.goodLED.off(*self.AIselect)
 
-    def run_engine(self):
+    async def run_engine(self):
+        self.turn = None
         print("Started thinking")
         think = self.engine.play(self.board, engine.Limit(time=self.timeout))
-        # TODO 
-        # TODO 
-        # TODO 
-        # TODO 
-        # TODO 
-        # TODO 
-        # TODO 
-        # TODO 
         move = (await think).move
         print("Finished thinking")
         self.legal_moves = (move, )
@@ -209,6 +203,8 @@ class ChessBoard:
         if piece.piece_type==chess.PAWN:
             if from_x!=to_x: # En passant
                 print("En passant detected")
+                if self.tiles[from_y][to_x]==Tile.MISSING:
+                    await self.on_place(to_x, from_y)
                 await self.on_misplace(to_x, from_y)
                 self.pending = True
             elif to_y%7==0: # Promotion

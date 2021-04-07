@@ -2,8 +2,8 @@
 import chess
 import chess.engine
 import asyncio
+import aioconsole
 import numpy as np
-import itertools as it
 
 import hardware as hw
 import software as sw
@@ -40,9 +40,9 @@ async def test():
     red = hw.LEDmatrix()
     blue = hw.LEDmatrix()
     turn = ( hw.LED(), hw.LED() )
-    transport, engine = await chess.engine.popen_uci("./stockfish")
+    transport, engine = await chess.engine.popen_uci("stockfish")
 
-    game = sw.ChessBoard(blue, red, turn, engine)
+    game = sw.ChessBoard(blue, red, turn, engine, 4)
     game.tiles = np.array([
         [sw.Tile.GROUND]*8,
         [sw.Tile.GROUND]*8,
@@ -69,7 +69,7 @@ async def test():
     while True:
         print(game_status(game, data))
         try:
-            cmd = input(";) ")
+            cmd = await aioconsole.ainput(";) ")
             square = chess.parse_square(cmd)
             y, x = divmod(square, 8)
             data[y][x] = not data[y][x]
@@ -87,6 +87,7 @@ async def test():
     return log
 
 if __name__=="__main__":
+    asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
     loop = asyncio.get_event_loop()
     log = loop.run_until_complete(test())
     print('\n'.join(log))

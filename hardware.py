@@ -3,10 +3,8 @@
 Deals with physical chessboard itself
 Provides interface to LED/Electrode 8x8 matrix
 """
-import chess
 import numpy as np
 # import gpiozero as gp
-from typing import Any, Callable
 
 class LEDmatrix:
     def __init__(self):
