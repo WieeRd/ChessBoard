@@ -18,7 +18,7 @@ def gen_status_str(data: np.ndarray, what: Callable[[Any], str]) -> str:
 
 def game_status(game: sw.ChessBoard, scan_data: np.ndarray) -> str:
     color = ['.', 'B', 'R', 'P']
-    board = str(game.board.unicode(empty_square='.', invert_color=True)).split(sep='\n')
+    board = str(game.board).split(sep='\n')
     scan = gen_status_str(scan_data, lambda x: '@' if x else '.').split(sep='\n')
     led = gen_status_str(game.goodLED.data + game.warnLED.data*2, lambda x: color[x]).split(sep='\n')
     tile = gen_status_str(game.tiles, lambda x: x.value).split(sep='\n')
@@ -40,7 +40,7 @@ async def test():
     red = hw.LEDmatrix()
     blue = hw.LEDmatrix()
     turn = ( hw.LED(), hw.LED() )
-    transport, engine = await chess.engine.popen_uci("stockfish")
+    transport, engine = await chess.engine.popen_uci("./stockfish")
 
     game = sw.ChessBoard(blue, red, turn, engine, 4)
     game.tiles = np.array([
