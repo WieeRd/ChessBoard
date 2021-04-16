@@ -1,3 +1,4 @@
+import numpy as np
 from abc import ABCMeta, abstractmethod
 
 from luma.core.interface.serial import spi, noop
@@ -58,7 +59,7 @@ class MatrixChain(LEDmatrix):
 
         self.height = 8
         self.width = 8*cascaded
-        self.data = [[False]*self.width]*self.height
+        self.data = np.full((self.width, self.height), False)
 
     def flush(self):
         with canvas(self.device) as draw:
