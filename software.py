@@ -4,8 +4,9 @@ from chess import engine
 
 import asyncio
 import numpy as np
-
+import gpiozero as gp
 import hardware as hw
+
 from enum import Enum
 from functools import wraps
 from typing import Tuple

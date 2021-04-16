@@ -1,98 +1,30 @@
+#!/usr/bin/env python3
 import numpy as np
-from abc import ABCMeta, abstractmethod
+from typing import Any, Sequence, Tuple, Union
 
-from luma.core.interface.serial import spi, noop
-from luma.core.render import canvas
-from luma.led_matrix.device import max7219
-
-# serial = spi(port=0, device=0, gpio=noop())
-# device = max7219(serial)
-
-# with canvas(device) as draw:
-#         draw.rectangle(device.bounding_box, outline="white", fill="black")
-
-class LEDmatrix(metaclass=ABCMeta):
+class OffsetArray(Sequence):
     """
-    Abstract base class for controlling LED matrix
+    <Example>
+    arr: numpy.ndarray
+    oa = OffsetArray(arr, (1,2))
+    oa[i][j] == arr[i+2][j+1]
+    >>> True
     """
-    @abstractmethod
-    def on(self, x:int, y:int): pass
+    def __init__(self, array: np.ndarray, offset: Tuple[int, ...]):
+        if len(array.shape)!=len(offset):
+            raise ValueError("Dimension of array and offset doesn't match")
+        self.array = array
+        self.offset = offset
 
-    @abstractmethod
-    def off(self, x:int, y:int): pass
+    def __len__(self) -> int:
+        return len(self.array) - self.offset[0]
 
-    @abstractmethod
-    def toggle(self, x:int, y:int): pass
+    def __getitem__(self, index: int) -> Union['OffsetArray', Any]:
+        ret = self.array[index + self.offset[0]]
+        if len(self.array.shape)==1:
+            return ret
+        else:
+            return OffsetArray(ret, self.offset[1:])
 
-    @abstractmethod
-    def flush(self): pass
-
-class DummyMatrix(LEDmatrix):
-    """
-    Virtual device that doesn't do anything
-    other than just storing changes made
-    """
-    def __init__(self):
-        self.data = [[False]*8]*8
-
-    def on(self, x:int, y:int):
-        self.data[y][x] = True
-
-    def off(self, x:int, y:int):
-        self.data[y][x] = False
-
-    def toggle(self, x:int, y:int):
-        self.data[y][x] = not self.data[y][x]
-
-    def flush(self):
-        pass
-
-class MatrixChain(LEDmatrix):
-    """
-    Controls multiple daisy-chained max7219 LED matrix
-    Change data attribute via on(), off(), toggle()
-    and apply it with flush()
-    """
-    def __init__(self, serial: spi, cascaded: int = 1):
-        self.cascaded = cascaded
-        self.device = max7219(serial, cascaded=cascaded)
-
-        self.height = 8
-        self.width = 8*cascaded
-        self.data = np.full((self.width, self.height), False)
-
-    def flush(self):
-        with canvas(self.device) as draw:
-            for y in range(self.height):
-                for x in range(self.width):
-                    if self.data[y][x]:
-                        draw.point((x, y), fill="white")
-
-    def on(self, x:int, y:int):
-        self.data[y][x] = True
-
-    def off(self, x:int, y:int):
-        self.data[y][x] = False
-
-    def toggle(self, x:int, y:int):
-        self.data[y][x] = not self.data[y][x]
-
-class SingleMatrix(LEDmatrix):
-    """
-    Control single LED matrix among daisy-chained devices
-    """
-    def __init__(self, chain: MatrixChain, offset: int):
-        self.chain = chain
-        self.offset = offset*8
-
-    def on(self, x:int, y:int):
-        self.chain.on(x+self.offset, y)
-
-    def off(self, x:int, y:int):
-        self.chain.off(x+self.offset, y)
-
-    def toggle(self, x:int, y:int):
-        self.chain.toggle(x+self.offset, y)
-
-    def flush(self):
-        self.chain.flush()
+    def __setitem__(self, index: int, value):
+        self.array[index + self.offset[0]] = value
