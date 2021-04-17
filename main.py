@@ -4,6 +4,7 @@ import chess.engine
 import asyncio
 import aioconsole
 import numpy as np
+import itertools as it
 
 import hardware as hw
 import software as sw
@@ -13,14 +14,18 @@ from typing import Callable, Any, List
 def gen_status_str(data: np.ndarray, what: Callable[[Any], str]) -> str:
     ret = []
     for row in data:
-        ret.append(' '.join(what(x) for x in row))
+        ret.append(' '.join(what(col) for col in row))
     return '\n'.join(ret)
 
 def game_status(game: sw.ChessBoard, scan_data: np.ndarray) -> str:
+    ledData = np.empty((8,8), dtype=np.int8) # TODO: inefficient
     color = ['.', 'B', 'R', 'P']
+    for y, x in it.product(range(8), range(8)):
+        ledData[y][x] = game.goodLED.data[y][x] + game.warnLED.data[y][x]
+
     board = str(game.board).split(sep='\n')
     scan = gen_status_str(scan_data, lambda x: '@' if x else '.').split(sep='\n')
-    led = gen_status_str(game.goodLED.data + game.warnLED.data*2, lambda x: color[x]).split(sep='\n')
+    led = gen_status_str(ledData, lambda x: color[x]).split(sep='\n')
     tile = gen_status_str(game.tiles, lambda x: x.value).split(sep='\n')
 
     ret = ""

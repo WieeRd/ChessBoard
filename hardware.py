@@ -105,7 +105,7 @@ class SingleMatrix(LEDmatrix):
 # Dummy classses used for software debugging
 # ( Fake devices that doesn't do anything )
 
-class dummyLED(gp.LED):
+class dummyLED(LED):
     def __init__(self): pass
     def on(self): pass
     def off(self): pass
