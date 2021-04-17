@@ -58,8 +58,6 @@ async def test():
         [sw.Tile.GROUND]*8,
         [sw.Tile.GROUND]*8,
     ])
-
-    log: List[str] = []
     data = np.array([
         [True]*8,
         [True]*8,
@@ -71,6 +69,7 @@ async def test():
         [True]*8,
     ])
 
+    log: List[str] = []
     while True:
         print(game_status(game, data))
         try:
@@ -90,6 +89,24 @@ async def test():
         except (KeyboardInterrupt, EOFError) as e:
             break
     return log
+
+async def main():
+    if not hw.LUMA:
+        print("Library 'luma' is missing")
+        exit(-1)
+
+    serial = hw.spi(spi=0, device=0, loop=hw.noop())
+    matrix_chain = hw.MatrixChain(serial, chained=2)
+
+    goodLED = hw.SingleMatrix(matrix_chain, offset=0)
+    warnLED = hw.SingleMatrix(matrix_chain, offset=1)
+    turnLED = ( hw.LED(10), hw.LED(11) )
+    # _, engine = await chess.engine.popen_uci("./stockfish")
+
+    detector = hw.Electrode()
+    game = sw.ChessBoard(goodLED, warnLED, turnLED)
+
+    # TODO
 
 if __name__=="__main__":
     asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())

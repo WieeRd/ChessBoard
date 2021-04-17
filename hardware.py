@@ -42,7 +42,7 @@ class dummyLED(LED):
     def __init__(self): pass
     def on(self): pass
     def off(self): pass
-
+    def close(self): pass
 
 class Electrode:
     def __init__(self):
@@ -85,23 +85,27 @@ class DummyMatrix(LEDmatrix):
         pass
 
 try:
-    from luma.core.interface.serial import spi
+    from luma.core.interface.serial import spi, noop
     from luma.core.render import canvas
     from luma.led_matrix.device import max7219
+    
 except ImportError:
-    print("Library luma.led_matrix is missing; Physical matrix disabled")
+    LUMA = False
+
 else:
+    LUMA = True
+
     class MatrixChain(LEDmatrix):
         """ Controls multiple daisy-chained max7219 LED matrix """
 
         data: np.ndarray
 
-        def __init__(self, serial: spi, cascaded: int = 1):
-            self.cascaded = cascaded
-            self.device = max7219(serial, cascaded=cascaded)
+        def __init__(self, serial: spi, chained: int = 1):
+            self.chained = chained
+            self.device = max7219(serial, chained=chained)
 
             self.height = 8
-            self.width = 8*cascaded
+            self.width = 8*chained
             self.data = np.full((self.width, self.height), False)
 
         def flush(self):
