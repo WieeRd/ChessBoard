@@ -21,7 +21,7 @@ def game_status(game: sw.ChessBoard, scan_data: np.ndarray) -> str:
     ledData = np.empty((8,8), dtype=np.int8) # TODO: inefficient
     color = ['.', 'B', 'R', 'P']
     for y, x in it.product(range(8), range(8)):
-        ledData[y][x] = game.goodLED.data[y][x] + game.warnLED.data[y][x]
+        ledData[y][x] = game.goodLED.data[y][x] + game.warnLED.data[y][x]*2
 
     board = str(game.board).split(sep='\n')
     scan = gen_status_str(scan_data, lambda x: '@' if x else '.').split(sep='\n')

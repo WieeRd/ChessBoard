@@ -8,10 +8,6 @@ import gpiozero as gp
 from abc import ABCMeta, abstractmethod
 from typing import Sequence, Union, Any, Sequence, Tuple, Union
 
-from luma.core.interface.serial import spi
-from luma.core.render import canvas
-from luma.led_matrix.device import max7219
-
 class OffsetArray(Sequence):
     """
     <Example>
@@ -42,6 +38,12 @@ class OffsetArray(Sequence):
 class LED(gp.LED):
     pass
 
+class dummyLED(LED):
+    def __init__(self): pass
+    def on(self): pass
+    def off(self): pass
+
+
 class Electrode:
     def __init__(self):
         self.data = np.full((8,8), False)
@@ -70,46 +72,6 @@ class LEDmatrix(metaclass=ABCMeta):
     @abstractmethod
     def flush(self): pass
 
-class MatrixChain(LEDmatrix):
-    """ Controls multiple daisy-chained max7219 LED matrix """
-
-    data: np.ndarray
-
-    def __init__(self, serial: spi, cascaded: int = 1):
-        self.cascaded = cascaded
-        self.device = max7219(serial, cascaded=cascaded)
-
-        self.height = 8
-        self.width = 8*cascaded
-        self.data = np.full((self.width, self.height), False)
-
-    def flush(self):
-        with canvas(self.device) as draw:
-            for y in range(self.height):
-                for x in range(self.width):
-                    if self.data[y][x]:
-                        draw.point((x, y), fill="white")
-
-class SingleMatrix(LEDmatrix):
-    """ Control single LED matrix in MatrixChain """
-
-    data: OffsetArray
-
-    def __init__(self, chain: MatrixChain, offset: int):
-        self.chain = chain
-        self.data = OffsetArray(self.chain.data, (offset*8, 0))
-
-    def flush(self):
-        self.chain.flush()
-
-# Dummy classses used for software debugging
-# ( Fake devices that doesn't do anything )
-
-class dummyLED(LED):
-    def __init__(self): pass
-    def on(self): pass
-    def off(self): pass
-
 class DummyMatrix(LEDmatrix):
     """
     Virtual device that doesn't do anything
@@ -121,3 +83,43 @@ class DummyMatrix(LEDmatrix):
 
     def flush(self):
         pass
+
+try:
+    from luma.core.interface.serial import spi
+    from luma.core.render import canvas
+    from luma.led_matrix.device import max7219
+except ImportError:
+    print("Library luma.led_matrix is missing; Physical matrix disabled")
+else:
+    class MatrixChain(LEDmatrix):
+        """ Controls multiple daisy-chained max7219 LED matrix """
+
+        data: np.ndarray
+
+        def __init__(self, serial: spi, cascaded: int = 1):
+            self.cascaded = cascaded
+            self.device = max7219(serial, cascaded=cascaded)
+
+            self.height = 8
+            self.width = 8*cascaded
+            self.data = np.full((self.width, self.height), False)
+
+        def flush(self):
+            with canvas(self.device) as draw:
+                for y in range(self.height):
+                    for x in range(self.width):
+                        if self.data[y][x]:
+                            draw.point((x, y), fill="white")
+
+    class SingleMatrix(LEDmatrix):
+        """ Control single LED matrix in MatrixChain """
+
+        data: OffsetArray
+
+        def __init__(self, chain: MatrixChain, offset: int):
+            self.chain = chain
+            self.data = OffsetArray(self.chain.data, (offset*8, 0))
+
+        def flush(self):
+            self.chain.flush()
+
