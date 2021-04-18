@@ -106,7 +106,16 @@ async def main():
     detector = hw.Electrode()
     game = sw.ChessBoard(goodLED, warnLED, turnLED)
 
-    # TODO
+    prev = np.full((8,8), False)
+    while True:
+        curr = detector.scan()
+        for y, x in it.product(range(8), range(8)):
+            if prev[y][x]!=curr[y][x]:
+                prev[y][x] = curr[y][x]
+                if curr[y][x]:
+                    await game.on_place(x, y)
+                else:
+                    await game.on_lift(x, y)
 
 if __name__=="__main__":
     asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())

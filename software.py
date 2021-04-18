@@ -46,9 +46,6 @@ class ChessBoard:
     """
     def __init__(self, goodLED: hw.LEDmatrix, warnLED: hw.LEDmatrix, turnLED: Tuple[hw.LED, hw.LED],
                  engine: engine.UciProtocol=None, timeout: float=1.0):
-        """
-        If engine parameter is given, vsAI mode is automatically enabled
-        """
         self.goodLED = goodLED
         self.warnLED = warnLED
         self.turnLED = turnLED
