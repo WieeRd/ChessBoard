@@ -2,14 +2,15 @@
 import chess
 import chess.engine
 import asyncio
-import aioconsole
 import numpy as np
-import itertools as it
+import gpiozero as gp
 
 import hardware as hw
 import software as sw
 
-from typing import Callable, Any, List
+from itertools import product
+from aioconsole import ainput
+from typing import Callable, Any, List, Optional
 
 def gen_status_str(data: np.ndarray, what: Callable[[Any], str]) -> str:
     ret = []
@@ -18,15 +19,15 @@ def gen_status_str(data: np.ndarray, what: Callable[[Any], str]) -> str:
     return '\n'.join(ret)
 
 def game_status(game: sw.ChessBoard, scan_data: np.ndarray) -> str:
-    ledData = np.empty((8,8), dtype=np.int8) # TODO: inefficient
     color = ['.', 'B', 'R', 'P']
-    for y, x in it.product(range(8), range(8)):
+    ledData = np.empty((8,8), dtype=np.int8) # TODO: inefficient
+    for y, x in product(range(8), range(8)):
         ledData[y][x] = game.goodLED.data[y][x] + game.warnLED.data[y][x]*2
 
+    tile = gen_status_str(game.tiles, lambda x: sw.StateChar[x]).split(sep='\n')
     board = str(game.board).split(sep='\n')
     scan = gen_status_str(scan_data, lambda x: '@' if x else '.').split(sep='\n')
     led = gen_status_str(ledData, lambda x: color[x]).split(sep='\n')
-    tile = gen_status_str(game.tiles, lambda x: x.value).split(sep='\n')
 
     ret = ""
     for i in range(8):
@@ -45,20 +46,21 @@ async def test():
     red = hw.DummyMatrix()
     blue = hw.DummyMatrix()
     turn = ( hw.dummyLED(), hw.dummyLED() )
-    _, engine = await chess.engine.popen_uci("./stockfish")
+    # _, engine = await chess.engine.popen_uci("./stockfish")
+    engine = None
 
     game = sw.ChessBoard(blue, red, turn, engine, 4)
     game.tiles = np.array([
-        [sw.Tile.GROUND]*8,
-        [sw.Tile.GROUND]*8,
-        [sw.Tile.EMPTY]*8,
-        [sw.Tile.EMPTY]*8,
-        [sw.Tile.EMPTY]*8,
-        [sw.Tile.EMPTY]*8,
-        [sw.Tile.GROUND]*8,
-        [sw.Tile.GROUND]*8,
+        [sw.GROUND]*8,
+        [sw.GROUND]*8,
+        [sw.EMPTY]*8,
+        [sw.EMPTY]*8,
+        [sw.EMPTY]*8,
+        [sw.EMPTY]*8,
+        [sw.GROUND]*8,
+        [sw.GROUND]*8,
     ])
-    data = np.array([
+    scan = np.array([
         [True]*8,
         [True]*8,
         [False]*8,
@@ -71,16 +73,13 @@ async def test():
 
     log: List[str] = []
     while True:
-        print(game_status(game, data))
+        print(game_status(game, scan))
         try:
-            cmd = await aioconsole.ainput(";) ")
+            cmd = await ainput(";) ")
             square = chess.parse_square(cmd)
             y, x = divmod(square, 8)
-            data[y][x] = not data[y][x]
-            if data[y][x]:
-                await game.on_place(x, y)
-            else:
-                await game.on_lift(x, y)
+            scan[y][x] = not scan[y][x]
+            await game.toggle(x, y)
             log.append(chess.square_name(square))
         except ValueError as e:
             print(f"{type(e).__name__}: {e}")
@@ -88,7 +87,7 @@ async def test():
             continue
         except (KeyboardInterrupt, EOFError) as e:
             break
-    return log
+    print('\n'.join(log))
 
 async def main():
     if not hw.LUMA:
@@ -106,19 +105,20 @@ async def main():
     detector = hw.Electrode()
     game = sw.ChessBoard(goodLED, warnLED, turnLED)
 
+    winner: Optional[chess.Color]
     prev = np.full((8,8), False)
     while True:
         curr = detector.scan()
-        for y, x in it.product(range(8), range(8)):
+        for y, x in product(range(8), range(8)):
             if prev[y][x]!=curr[y][x]:
                 prev[y][x] = curr[y][x]
-                if curr[y][x]:
-                    await game.on_place(x, y)
-                else:
-                    await game.on_lift(x, y)
+                try: await game.toggle(x, y)
+                except sw.GameOverError as e:
+                    winner = e.reason.winner
+                    break
+
+    # TODO: Ending event
 
 if __name__=="__main__":
     asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
-    loop = asyncio.get_event_loop()
-    log = loop.run_until_complete(test())
-    print('\n'.join(log))
+    asyncio.run(test())

@@ -6,18 +6,29 @@ import asyncio
 import numpy as np
 import hardware as hw
 
-from enum import Enum
+from enum import Flag, auto
 from functools import wraps
 from typing import Tuple
 
-# TODO: IntFlag
-class Tile(Enum):
-    "Tile state (Enum)"
-    EMPTY = '.'
-    GROUND = 'G'
-    MISSING = 'M'
-    WRONG = 'W'
-    SELECT = 'S'
+class State(Flag):
+    NONE = 0
+    DETECTED = auto()
+    ERROR = auto()
+    CHOSEN = auto()
+
+EMPTY = State.NONE
+MISSING = State.ERROR
+GROUND = State.DETECTED
+WRONG = State.DETECTED | State.ERROR
+SELECT = State.CHOSEN
+
+StateChar = {
+    EMPTY: '.',
+    MISSING: '!',
+    GROUND: 'G',
+    WRONG: '?',
+    SELECT: 'S',
+}
 
 class GameOverError(Exception):
     """
@@ -41,8 +52,9 @@ def event(func):
 class ChessBoard:
     """
     Controls LED chessboard based on events occured.
-    Only on_place, on_lift should be called directly
-    unless you fully understand my code
+    Only on_place(), on_lift(), toggle() should be called
+    unless you fully understand what you're doing
+    I don't know what I'm doing btw
     """
     def __init__(self, goodLED: hw.LEDmatrix, warnLED: hw.LEDmatrix, turnLED: Tuple[hw.LED, hw.LED],
                  engine: engine.UciProtocol=None, timeout: float=1.0):
@@ -57,14 +69,14 @@ class ChessBoard:
 
         self.board = chess.Board()
         self.tiles = np.array([
-            [Tile.MISSING]*8,
-            [Tile.MISSING]*8,
-            [Tile.EMPTY]*8,
-            [Tile.EMPTY]*8,
-            [Tile.EMPTY]*8,
-            [Tile.EMPTY]*8,
-            [Tile.MISSING]*8,
-            [Tile.MISSING]*8,
+            [MISSING]*8,
+            [MISSING]*8,
+            [EMPTY]*8,
+            [EMPTY]*8,
+            [EMPTY]*8,
+            [EMPTY]*8,
+            [MISSING]*8,
+            [MISSING]*8,
         ])
 
         self.turn = None
@@ -101,11 +113,11 @@ class ChessBoard:
     @event
     async def run_engine(self):
         """
-        Blocks on_select on both side by setting turn to None
-        When finished thinking, highlights from_square of result
-        to_square will be highlighted when from_square is selected
+        Blocks on_select on both side
+        When finished, highlights from_square of engine's move
+        Limits legal_moves to single move (engine result)
         """
-        self.turn = None
+        self.turn = None # Blocks selection till engine returns
         think = self.engine.play(self.board, engine.Limit(time=self.timeout))
         move = (await think).move
         self.legal_moves = (move, )
@@ -119,50 +131,6 @@ class ChessBoard:
         return self.board.piece_at(chess.square(x, y)).color
 
     @event
-    async def on_place(self, x:int, y:int):
-        """
-        When new object is detected by the sensor
-
-        raises GameOverError if the event caused the game to end
-        """
-        tile = self.tiles[y][x]
-        assert tile in (Tile.EMPTY, Tile.MISSING, Tile.SELECT)
-        if tile==Tile.EMPTY:
-            if (x, y) in self.ps_moves:
-                await self.on_move(x, y)
-            else:
-                await self.on_misplace(x, y)
-        else:
-            color = self.color_at(x, y)
-            self.in_air[color].remove((x, y))
-            if tile==Tile.MISSING:
-                if (x, y) in self.ps_moves:
-                    await self.on_kill(x, y)
-                else:
-                    await self.on_retrieve(x, y)
-            elif tile==Tile.SELECT:
-                await self.on_unselect()
-
-    @event
-    async def on_lift(self, x:int, y:int):
-        """
-        When object is no longer detected by the sensor
-
-        raises GameOverError if the event caused the game to end
-        """
-        tile = self.tiles[y][x]
-        assert tile in (Tile.GROUND, Tile.WRONG)
-        if tile==Tile.GROUND:
-            color = self.color_at(x, y)
-            self.in_air[color].add((x, y))
-            if self.turn==color and len(self.in_air[color])==1:
-                await self.on_select(x, y)
-            else:
-                await self.on_missing(x, y)
-        elif tile==Tile.WRONG:
-            await self.on_cleanup(x, y)
-
-    @event
     async def on_select(self, x:int, y:int):
         """
         When right color of piece is picked up,
@@ -170,7 +138,7 @@ class ChessBoard:
 
         Highlights possible moves with goodLED
         """
-        self.tiles[y][x] = Tile.SELECT
+        self.tiles[y][x] = SELECT
         self.select = (x, y)
         func = lambda m: m.from_square==chess.square(x, y)
         tmp = filter(func, self.legal_moves)
@@ -189,7 +157,7 @@ class ChessBoard:
         """
         assert self.select!=None
         x, y = self.select
-        self.tiles[y][x] = Tile.GROUND
+        self.tiles[y][x] = GROUND
         for x, y in self.ps_moves:
             self.goodLED.off(x, y)
         self.select = None
@@ -202,7 +170,7 @@ class ChessBoard:
 
         turns on warnLED at lifted square
         """
-        self.tiles[y][x] = Tile.MISSING
+        self.tiles[y][x] = MISSING
         self.errors += 1
         self.warnLED.on(x, y)
         if self.select!=None and self.turn==self.color_at(x, y):
@@ -217,7 +185,7 @@ class ChessBoard:
 
         turns off warnLED by on_missing
         """
-        self.tiles[y][x] = Tile.GROUND
+        self.tiles[y][x] = GROUND
         self.errors -= 1
         self.warnLED.off(x, y)
         color = self.color_at(x, y)
@@ -238,7 +206,7 @@ class ChessBoard:
 
         turns on warnLED at detected square
         """
-        self.tiles[y][x] = Tile.WRONG
+        self.tiles[y][x] = WRONG
         self.errors += 1
         self.warnLED.on(x, y)
 
@@ -249,7 +217,7 @@ class ChessBoard:
 
         turns off warnLED by on_misplace
         """
-        self.tiles[y][x] = Tile.EMPTY
+        self.tiles[y][x] = EMPTY
         self.errors -= 1
         self.warnLED.off(x, y)
         if self.pending and self.errors==0:
@@ -273,14 +241,14 @@ class ChessBoard:
         self.in_air[self.turn].remove(self.select)
         await self.on_unselect()
 
-        self.tiles[to_y][to_x] = Tile.GROUND
-        self.tiles[from_y][from_x] = Tile.EMPTY
+        self.tiles[to_y][to_x] = GROUND
+        self.tiles[from_y][from_x] = EMPTY
 
         # Special move detection
         if piece.piece_type==chess.PAWN:
             if from_x!=to_x: # En passant
                 print("En passant detected")
-                if self.tiles[from_y][to_x]==Tile.MISSING:
+                if self.tiles[from_y][to_x]==MISSING:
                     await self.on_place(to_x, from_y)
                 await self.on_misplace(to_x, from_y)
                 self.pending = True
@@ -318,12 +286,67 @@ class ChessBoard:
 
         self.errors -= 1 # Missing -> Killed
         self.warnLED.off(to_x, to_y)
-        self.tiles[to_y][to_x] = Tile.GROUND
+        self.tiles[to_y][to_x] = GROUND
 
         await self.on_unselect()
         self.in_air[self.turn].remove((from_x, from_y))
-        self.tiles[from_y][from_x] = Tile.EMPTY
+        self.tiles[from_y][from_x] = EMPTY
 
         self.board.push(move)
         await self.switch_turn()
 
+    @event
+    async def on_lift(self, x:int, y:int):
+        """
+        When object is no longer detected by the sensor
+
+        raises GameOverError if the event caused the game to end
+        """
+        tile = self.tiles[y][x]
+        assert tile & State.DETECTED
+        if tile==GROUND:
+            color = self.color_at(x, y)
+            self.in_air[color].add((x, y))
+            if self.turn==color and len(self.in_air[color])==1:
+                await self.on_select(x, y)
+            else:
+                await self.on_missing(x, y)
+        elif tile==WRONG:
+            await self.on_cleanup(x, y)
+
+    @event
+    async def on_place(self, x:int, y:int):
+        """
+        When new object is detected by the sensor
+
+        raises GameOverError if the event caused the game to end
+        """
+        tile = self.tiles[y][x]
+        assert not (tile & State.DETECTED)
+        if tile==EMPTY:
+            if (x, y) in self.ps_moves:
+                await self.on_move(x, y)
+            else:
+                await self.on_misplace(x, y)
+        else: # can know the owner of the piece
+            color = self.color_at(x, y)
+            self.in_air[color].remove((x, y))
+            if tile==MISSING:
+                if (x, y) in self.ps_moves:
+                    await self.on_kill(x, y)
+                else:
+                    await self.on_retrieve(x, y)
+            elif tile==SELECT:
+                await self.on_unselect()
+
+    @event
+    async def toggle(self, x:int, y:int):
+        """
+        Invokes on_place or on_lift at (x, y)
+        based on State.DETECTED of that tile
+        """
+        tile = self.tiles[y][x]
+        if tile & State.DETECTED:
+            await self.on_lift(x, y)
+        else:
+            await self.on_place(x, y)
