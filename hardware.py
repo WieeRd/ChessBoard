@@ -102,11 +102,11 @@ else:
 
         def __init__(self, serial: spi, chained: int = 1):
             self.chained = chained
-            self.device = max7219(serial, chained=chained)
+            self.device = max7219(serial, cascaded=chained)
 
             self.height = 8
             self.width = 8*chained
-            self.data = np.full((self.width, self.height), False)
+            self.data = np.full((self.height, self.width), False)
 
         def flush(self):
             with canvas(self.device) as draw:
@@ -122,7 +122,7 @@ else:
 
         def __init__(self, chain: MatrixChain, offset: int):
             self.chain = chain
-            self.data = OffsetArray(self.chain.data, (offset*8, 0))
+            self.data = OffsetArray(self.chain.data, (0, offset*8))
 
         def flush(self):
             self.chain.flush()
