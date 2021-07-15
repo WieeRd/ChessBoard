@@ -3,14 +3,13 @@
 Deals with physical chessboard itself
 Provides interface to LED/Electrode 8x8 matrix
 """
+import asyncio
 import numpy as np
 import gpiozero as gp
-from abc import ABCMeta, abstractmethod
-from typing import Sequence, Union, Any, Sequence, Tuple, Union
+from typing import List, Sequence, Union, Any, Sequence, Tuple, Union
 
 class OffsetArray(Sequence):
     """
-    <Example>
     arr: numpy.ndarray
     oa = OffsetArray(arr, (1,2))
     oa[i][j] == arr[i+2][j+1]
@@ -35,8 +34,8 @@ class OffsetArray(Sequence):
     def __setitem__(self, index: int, value):
         self.array[index + self.offset[0]] = value
 
-class LED(gp.LED):
-    pass
+LED = gp.LED
+Button = gp.Button
 
 class dummyLED(LED):
     def __init__(self): pass
@@ -45,20 +44,26 @@ class dummyLED(LED):
     def close(self): pass
 
 class Electrode:
-    def __init__(self):
-        self.data = np.full((8,8), False)
+    def __init__(self, send: List[LED], receive: List[Button]):
+        self.data = np.full((len(send),len(receive)), False)
+        self.send = send
+        self.receive = receive
 
-    def scan(self) -> np.ndarray:
-        raise NotImplementedError
+    def scan(self):
+        for i, s in enumerate(self.send):
+            s.on()
+            for j, r in enumerate(self.receive):
+                self.data[i][j] = r.value
+            s.off()
 
-class LEDmatrix(metaclass=ABCMeta):
+class LEDmatrix:
     """
-    Abstract base class for controlling LED matrix
+    Base class for LED matrix controlling
     Modifity data with on(), off(), toggle()
     apply it with flush()
     """
 
-    data: Union[Sequence, np.ndarray]
+    data: Union[List, np.ndarray]
 
     def on(self, x:int, y:int):
         self.data[y][x] = True
@@ -69,8 +74,8 @@ class LEDmatrix(metaclass=ABCMeta):
     def toggle(self, x:int, y:int):
         self.data[y][x] = not self.data[y][x]
 
-    @abstractmethod
-    def flush(self): pass
+    def flush(self):
+        pass
 
 class DummyMatrix(LEDmatrix):
     """
@@ -80,9 +85,6 @@ class DummyMatrix(LEDmatrix):
 
     def __init__(self):
         self.data = np.full((8, 8), False)
-
-    def flush(self):
-        pass
 
 try:
     from luma.core.interface.serial import spi, noop
@@ -106,6 +108,7 @@ else:
 
             self.height = 8
             self.width = 8*chained
+
             self.data = np.full((self.height, self.width), False)
 
         def flush(self):
