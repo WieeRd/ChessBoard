@@ -8,13 +8,15 @@ import hardware as hw
 
 from enum import Flag, auto
 from functools import wraps
-from typing import Tuple
+from typing import Optional, Tuple
+
 
 class State(Flag):
     NONE = 0
     DETECTED = auto()
     ERROR = auto()
     CHOSEN = auto()
+
 
 EMPTY = State.NONE
 MISSING = State.ERROR
@@ -23,12 +25,13 @@ WRONG = State.DETECTED | State.ERROR
 SELECT = State.CHOSEN
 
 StateChar = {
-    EMPTY: '.',
-    MISSING: '!',
-    GROUND: 'G',
-    WRONG: '?',
-    SELECT: 'S',
+    EMPTY: ".",
+    MISSING: "!",
+    GROUND: "G",
+    WRONG: "?",
+    SELECT: "S",
 }
+
 
 class GameOverError(Exception):
     """
@@ -36,57 +39,67 @@ class GameOverError(Exception):
         msg - Exception message
         reason - chess.Outcome value
     """
-    def __init__(self, reason: chess.Outcome, msg: str="Game over!"):
+
+    def __init__(self, reason: chess.Outcome, msg: str = "Game over!"):
         self.msg = msg
         self.reason = reason
         super().__init__(self.msg)
 
+
 def event(func):
     """Print occured event (Debugging purpose)"""
+
     @wraps(func)
     def ret(*args):
         print(f"Event : {func.__name__}{args[1:]}")
         return func(*args)
+
     return ret
+
 
 class ChessBoard:
     """
     Controls LED chessboard based on events occured.
     Only on_place(), on_lift(), toggle() should be called
     unless you fully understand what you're doing
-    I don't know what I'm doing btw
+    Actually I don't know what I'm doing tbh
     """
-    def __init__(self,
-            goodLED: hw.LEDmatrix,
-            warnLED: hw.LEDmatrix,
-            turnLED: Tuple[hw.LED, hw.LED],
-            engine: engine.UciProtocol=None,
-            timeout: float=1.0):
+
+    def __init__(
+        self,
+        goodLED: hw.LEDmatrix,
+        warnLED: hw.LEDmatrix,
+        turnLED: Tuple[hw.LED, hw.LED],
+        engine: engine.UciProtocol = None,
+        timeout: float = 1.0,
+    ):
 
         self.goodLED = goodLED
         self.warnLED = warnLED
         self.turnLED = turnLED
 
         self.engine = engine
-        if self.engine!=None:
+        if self.engine != None:
             self.timeout = timeout
             self.AIselect = None
 
         self.board = chess.Board()
-        self.tiles = np.array([
-            [MISSING]*8,
-            [MISSING]*8,
-            [EMPTY]*8,
-            [EMPTY]*8,
-            [EMPTY]*8,
-            [EMPTY]*8,
-            [MISSING]*8,
-            [MISSING]*8,
-        ])
+        self.tiles = np.array(
+            [
+                [MISSING] * 8,
+                [MISSING] * 8,
+                [EMPTY] * 8,
+                [EMPTY] * 8,
+                [EMPTY] * 8,
+                [EMPTY] * 8,
+                [MISSING] * 8,
+                [MISSING] * 8,
+            ]
+        )
 
-        self.turn = None
-        self.pending = True
-        self.errors = 0
+        self.turn: Optional[chess.Color] = None
+        self.pending: bool = True
+        self.errors: int = 0
 
         self.in_air = [set(), set()]
         self.legal_moves = tuple(self.board.legal_moves)
@@ -106,13 +119,13 @@ class ChessBoard:
         self.legal_moves = tuple(self.board.legal_moves)
 
         result = self.board.outcome()
-        if result!=None:
+        if result != None:
             raise GameOverError(result)
 
-        if self.engine!=None:
-            if self.turn==chess.BLACK: # AI's turn
+        if self.engine != None:
+            if self.turn == chess.BLACK:  # AI's turn
                 asyncio.create_task(self.run_engine())
-            elif self.turn==chess.WHITE and self.AIselect:
+            elif self.turn == chess.WHITE and self.AIselect:
                 self.goodLED.off(*self.AIselect)
 
     @event
@@ -122,21 +135,25 @@ class ChessBoard:
         When finished, highlights from_square of engine's move
         Limits legal_moves to single move (engine result)
         """
-        self.turn = None # Blocks selection till engine returns
+        self.turn = None  # Blocks selection till engine returns
         think = self.engine.play(self.board, engine.Limit(time=self.timeout))
         move = (await think).move
-        self.legal_moves = (move, )
+        self.legal_moves = (move,)
         y, x = divmod(move.from_square, 8)
         self.AIselect = (x, y)
         self.goodLED.on(x, y)
         self.turn = chess.BLACK
 
-    def color_at(self, x:int, y:int) -> chess.Color:
-        """ raises AttributeError if called on empty square """
-        return self.board.piece_at(chess.square(x, y)).color
+    def color_at(self, x: int, y: int) -> chess.Color:
+        """raises AttributeError if called on empty square"""
+        square = chess.square(x, y)
+        piece = self.board.piece_at(square)
+        if not piece:
+            raise ValueError(f"No piece at {(x, y)}")
+        return piece.color
 
     @event
-    async def on_select(self, x:int, y:int):
+    async def on_select(self, x: int, y: int):
         """
         When right color of piece is picked up,
         and it's the only piece that's picked up
@@ -145,7 +162,7 @@ class ChessBoard:
         """
         self.tiles[y][x] = SELECT
         self.select = (x, y)
-        func = lambda m: m.from_square==chess.square(x, y)
+        func = lambda m: m.from_square == chess.square(x, y)
         tmp = filter(func, self.legal_moves)
         tmp = (divmod(x.to_square, 8) for x in tmp)
         self.ps_moves = tuple((x, y) for y, x in tmp)
@@ -160,7 +177,7 @@ class ChessBoard:
 
         Cancels highlights by on_select
         """
-        assert self.select!=None
+        assert self.select != None
         x, y = self.select
         self.tiles[y][x] = GROUND
         for x, y in self.ps_moves:
@@ -169,7 +186,7 @@ class ChessBoard:
         self.ps_moves = ()
 
     @event
-    async def on_missing(self, x:int, y:int):
+    async def on_missing(self, x: int, y: int):
         """
         When a piece that shouldn't move is lifted
 
@@ -178,13 +195,13 @@ class ChessBoard:
         self.tiles[y][x] = MISSING
         self.errors += 1
         self.warnLED.on(x, y)
-        if self.select!=None and self.turn==self.color_at(x, y):
+        if self.select != None and self.turn == self.color_at(x, y):
             select = self.select
             await self.on_unselect()
             await self.on_missing(*select)
 
     @event
-    async def on_retrieve(self, x:int, y:int):
+    async def on_retrieve(self, x: int, y: int):
         """
         When a missing piece returns to the board
 
@@ -194,17 +211,17 @@ class ChessBoard:
         self.errors -= 1
         self.warnLED.off(x, y)
         color = self.color_at(x, y)
-        if self.turn==color and len(self.in_air[color])==1:
+        if self.turn == color and len(self.in_air[color]) == 1:
             new_select = tuple(self.in_air[color])[0]
             self.warnLED.off(*new_select)
             await self.on_select(*new_select)
-            self.errors -= 1 # gotcha! Pesky lil bug
-        if self.pending and self.errors==0:
+            self.errors -= 1  # gotcha! Pesky lil bug
+        if self.pending and self.errors == 0:
             self.pending = False
             await self.switch_turn()
 
     @event
-    async def on_misplace(self, x:int, y:int):
+    async def on_misplace(self, x: int, y: int):
         """
         When a new object is detected at random spot
         (Usually by attempting illegal move)
@@ -216,7 +233,7 @@ class ChessBoard:
         self.warnLED.on(x, y)
 
     @event
-    async def on_cleanup(self, x:int, y:int):
+    async def on_cleanup(self, x: int, y: int):
         """
         When misplaced object is removed
 
@@ -225,19 +242,19 @@ class ChessBoard:
         self.tiles[y][x] = EMPTY
         self.errors -= 1
         self.warnLED.off(x, y)
-        if self.pending and self.errors==0:
+        if self.pending and self.errors == 0:
             self.pending = False
             await self.switch_turn()
 
     @event
-    async def on_move(self, to_x:int, to_y:int):
+    async def on_move(self, to_x: int, to_y: int):
         """
         When selected piece is placed at EMTPY square
 
         Pawn is automatically promoted to Queen when it reaches last square
         When castling, King always has to be moved first
         """
-        assert self.select!=None and self.turn!=None
+        assert self.select != None and self.turn != None
         from_x, from_y = self.select
         move = chess.Move(chess.square(from_x, from_y), chess.square(to_x, to_y))
         piece = self.board.piece_at(chess.square(*self.select))
@@ -250,22 +267,22 @@ class ChessBoard:
         self.tiles[from_y][from_x] = EMPTY
 
         # Special move detection
-        if piece.piece_type==chess.PAWN:
-            if from_x!=to_x: # En passant
+        if piece.piece_type == chess.PAWN:
+            if from_x != to_x:  # En passant
                 print("En passant detected")
-                if self.tiles[from_y][to_x]==MISSING:
+                if self.tiles[from_y][to_x] == MISSING:
                     await self.on_place(to_x, from_y)
                 await self.on_misplace(to_x, from_y)
                 self.pending = True
-            elif to_y%7==0: # Promotion
+            elif to_y % 7 == 0:  # Promotion
                 print("Promotion detected")
                 move.promotion = chess.QUEEN
-        elif piece.piece_type==chess.KING:
+        elif piece.piece_type == chess.KING:
             dx = to_x - from_x
-            if abs(dx)>1: # Castling
+            if abs(dx) > 1:  # Castling
                 print("Castling detected")
-                rook_init = 7 if dx>0 else 0, to_y
-                rook_after = to_x - dx//2, to_y
+                rook_init = 7 if dx > 0 else 0, to_y
+                rook_after = to_x - dx // 2, to_y
                 self.in_air[self.turn].add(rook_after)
                 await self.on_misplace(*rook_init)
                 await self.on_missing(*rook_after)
@@ -274,22 +291,24 @@ class ChessBoard:
         # Normally switch_turn() is called after moving,
         # but moves that manipulate 2 pieces set 'pending' state instead
         self.board.push(move)
-        if self.pending: print("Pending")
-        else: await self.switch_turn()
+        if self.pending:
+            print("Pending")
+        else:
+            await self.switch_turn()
 
     @event
-    async def on_kill(self, to_x:int, to_y:int):
+    async def on_kill(self, to_x: int, to_y: int):
         """
         When selected piece is placed on MISSING square
 
         'Deletes' victim piece and the rest is same as on_move
         """
-        assert self.select!=None and self.turn!=None
+        assert self.select != None and self.turn != None
         from_x, from_y = self.select
         move = chess.Move(chess.square(from_x, from_y), chess.square(to_x, to_y))
         print(move.uci())
 
-        self.errors -= 1 # Missing -> Killed
+        self.errors -= 1  # Missing -> Killed
         self.warnLED.off(to_x, to_y)
         self.tiles[to_y][to_x] = GROUND
 
@@ -301,7 +320,7 @@ class ChessBoard:
         await self.switch_turn()
 
     @event
-    async def on_lift(self, x:int, y:int):
+    async def on_lift(self, x: int, y: int):
         """
         When object is no longer detected by the sensor
 
@@ -309,18 +328,18 @@ class ChessBoard:
         """
         tile = self.tiles[y][x]
         assert tile & State.DETECTED
-        if tile==GROUND:
+        if tile == GROUND:
             color = self.color_at(x, y)
             self.in_air[color].add((x, y))
-            if self.turn==color and len(self.in_air[color])==1:
+            if self.turn == color and len(self.in_air[color]) == 1:
                 await self.on_select(x, y)
             else:
                 await self.on_missing(x, y)
-        elif tile==WRONG:
+        elif tile == WRONG:
             await self.on_cleanup(x, y)
 
     @event
-    async def on_place(self, x:int, y:int):
+    async def on_place(self, x: int, y: int):
         """
         When new object is detected by the sensor
 
@@ -328,24 +347,24 @@ class ChessBoard:
         """
         tile = self.tiles[y][x]
         assert not (tile & State.DETECTED)
-        if tile==EMPTY:
+        if tile == EMPTY:
             if (x, y) in self.ps_moves:
                 await self.on_move(x, y)
             else:
                 await self.on_misplace(x, y)
-        else: # can know the owner of the piece
+        else:  # can know the owner of the piece
             color = self.color_at(x, y)
             self.in_air[color].remove((x, y))
-            if tile==MISSING:
+            if tile == MISSING:
                 if (x, y) in self.ps_moves:
                     await self.on_kill(x, y)
                 else:
                     await self.on_retrieve(x, y)
-            elif tile==SELECT:
+            elif tile == SELECT:
                 await self.on_unselect()
 
     @event
-    async def toggle(self, x:int, y:int):
+    async def toggle(self, x: int, y: int):
         """
         Invokes on_place or on_lift at (x, y)
         based on State.DETECTED of that tile
