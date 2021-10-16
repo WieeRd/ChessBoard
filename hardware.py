@@ -6,6 +6,7 @@ Provides interface to LED/Electrode 8x8 matrix
 import asyncio
 import numpy as np
 import gpiozero as gp
+
 from typing import List, Sequence, Union, Any, Sequence, Tuple, Union
 
 
@@ -108,15 +109,13 @@ class DummyMatrix(LEDmatrix):
 
 
 try:
-    import luma
+    from luma.core.interface.serial import spi, noop  # type: ignore
+    from luma.core.render import canvas  # type: ignore
+    from luma.led_matrix.device import max7219  # type: ignore
 except ImportError:
     LUMA = False
 else:
     LUMA = True
-
-    from luma.core.interface.serial import spi, noop
-    from luma.core.render import canvas
-    from luma.led_matrix.device import max7219
 
     class MatrixChain(LEDmatrix):
         """Controls multiple daisy-chained max7219 LED matrix"""
