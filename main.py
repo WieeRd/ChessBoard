@@ -12,6 +12,21 @@ from itertools import product
 from aioconsole import ainput
 from typing import Callable, Any, List, Optional
 
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="[%(levelname)s] (%(module)s) %(message)s"  # %(name)s
+)
+
+StateChar = {
+    sw.EMPTY: ".",
+    sw.MISSING: "!",
+    sw.GROUND: "G",
+    sw.MISPLACE: "?",
+    sw.SELECT: "S",
+}
+
+
 def gen_status_str(data: np.ndarray, what: Callable[[Any], str]) -> str:
     ret = []
     for row in data:
@@ -24,7 +39,7 @@ def game_status(game: sw.ChessBoard, scan_data: np.ndarray) -> str:
     for y, x in product(range(8), range(8)):
         ledData[y][x] = game.goodLED.data[y][x] + game.warnLED.data[y][x]*2
 
-    tile = gen_status_str(game.states, lambda x: sw.StateChar[x]).split(sep='\n')
+    tile = gen_status_str(game.states, lambda x: StateChar[x]).split(sep='\n')
     board = str(game.board).split(sep='\n')
     scan = gen_status_str(scan_data, lambda x: '@' if x else '.').split(sep='\n')
     led = gen_status_str(ledData, lambda x: color[x]).split(sep='\n')
@@ -89,35 +104,35 @@ async def test():
             break
     print('\n'.join(log))
 
-async def main():
-    if not hw.LUMA:
-        print("Library 'luma' is missing")
-        exit(-1)
+# async def main():
+#     if not hw.LUMA:
+#         print("Library 'luma' is missing")
+#         exit(-1)
 
-    serial = hw.spi(spi=0, device=0, loop=hw.noop())
-    matrix_chain = hw.MatrixChain(serial, chained=2)
+#     serial = hw.spi(spi=0, device=0, loop=hw.noop())
+#     matrix_chain = hw.MatrixChain(serial, chained=2)
 
-    goodLED = hw.SingleMatrix(matrix_chain, offset=0)
-    warnLED = hw.SingleMatrix(matrix_chain, offset=1)
-    turnLED = ( hw.LED(10), hw.LED(11) )
-    # _, engine = await chess.engine.popen_uci("./stockfish")
+#     goodLED = hw.SingleMatrix(matrix_chain, offset=0)
+#     warnLED = hw.SingleMatrix(matrix_chain, offset=1)
+#     turnLED = ( hw.LED(10), hw.LED(11) )
+#     # _, engine = await chess.engine.popen_uci("./stockfish")
 
-    detector = hw.Electrode()
-    game = sw.ChessBoard(goodLED, warnLED, turnLED)
+#     detector = hw.Electrode()
+#     game = sw.ChessBoard(goodLED, warnLED, turnLED)
 
-    winner: Optional[chess.Color]
-    prev = np.full((8,8), False)
-    while True:
-        curr = detector.scan()
-        for y, x in product(range(8), range(8)):
-            if prev[y][x]!=curr[y][x]:
-                prev[y][x] = curr[y][x]
-                try: await game.toggle(x, y)
-                except sw.GameOverError as e:
-                    winner = e.reason.winner
-                    break
+#     winner: Optional[chess.Color]
+#     prev = np.full((8,8), False)
+#     while True:
+#         curr = detector.scan()
+#         for y, x in product(range(8), range(8)):
+#             if prev[y][x]!=curr[y][x]:
+#                 prev[y][x] = curr[y][x]
+#                 try: await game.toggle(x, y)
+#                 except sw.GameOverError as e:
+#                     winner = e.reason.winner
+#                     break
 
-    # TODO: Ending event
+#     # TODO: Ending event
 
 if __name__=="__main__":
     asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
