@@ -24,7 +24,7 @@ def game_status(game: sw.ChessBoard, scan_data: np.ndarray) -> str:
     for y, x in product(range(8), range(8)):
         ledData[y][x] = game.goodLED.data[y][x] + game.warnLED.data[y][x]*2
 
-    tile = gen_status_str(game.tiles, lambda x: sw.StateChar[x]).split(sep='\n')
+    tile = gen_status_str(game.states, lambda x: sw.StateChar[x]).split(sep='\n')
     board = str(game.board).split(sep='\n')
     scan = gen_status_str(scan_data, lambda x: '@' if x else '.').split(sep='\n')
     led = gen_status_str(ledData, lambda x: color[x]).split(sep='\n')
@@ -50,7 +50,7 @@ async def test():
     engine = None
 
     game = sw.ChessBoard(blue, red, turn, engine, 4)
-    game.tiles = np.array([
+    game.states = np.array([
         [sw.GROUND]*8,
         [sw.GROUND]*8,
         [sw.EMPTY]*8,
