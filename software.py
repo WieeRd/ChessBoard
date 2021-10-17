@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
 import chess
-from chess import engine
-
+import chess.engine
 import asyncio
 import logging
 import functools
@@ -11,7 +9,7 @@ import hardware as hw
 from enum import Flag, auto
 from typing import List, Optional, Set, Tuple
 
-Tile = Tuple[int, int]
+logger = logging.getLogger(__name__)
 
 
 class State(Flag):
@@ -37,7 +35,7 @@ class GameOverError(Exception):
 def event(func):
     @functools.wraps(func)
     def ret(*args):
-        logging.info(f"Event: {func.__name__}{args[1:]}")
+        logger.info(f"Event: {func.__name__}{args[1:]}")
         return func(*args)
 
     return ret
@@ -56,7 +54,7 @@ class ChessBoard:
         goodLED: hw.LEDmatrix,
         warnLED: hw.LEDmatrix,
         turnLED: Tuple[hw.LED, hw.LED],
-        engine: engine.UciProtocol = None,
+        engine: chess.engine.UciProtocol = None,
         timeout: float = 1.0,
     ):
         self.board = chess.Board()
@@ -77,18 +75,20 @@ class ChessBoard:
         self.warnLED = warnLED
         self.turnLED = turnLED
 
+        Pos = Tuple[int, int]
+
         self.engine = engine
         self.timeout = timeout
-        self.AIselect: Optional[Tile] = None
+        self.AIselect: Optional[Pos] = None
 
         self.turn: Optional[chess.Color] = None
-        self.in_air: Tuple[Set[Tile], Set[Tile]] = set(), set()
+        self.in_air: Tuple[Set[Pos], Set[Pos]] = set(), set()
         self.pending: bool = True
         self.errors: int = 0
 
-        self.select: Optional[Tile] = None
+        self.select: Optional[Pos] = None
         self.legal_moves: List[chess.Move] = []
-        self.candidates: List[Tile] = []
+        self.candidates: List[Pos] = []
 
     @event
     async def switch_turn(self):
@@ -112,18 +112,17 @@ class ChessBoard:
             elif self.turn == chess.WHITE and self.AIselect:
                 self.goodLED.off(*self.AIselect)
 
-    @event
     async def run_engine(self):
         """
         1. Block on_select on both side
         2. When finished thinking, highlight from_square of result
         3. Limit legal_moves to single move (engine result)
         """
-        logging.info("Running uci engine")
+        logger.debug("Running uci engine")
         assert self.engine != None
         self.turn = None  # Block selection untill engine returns
 
-        limit = engine.Limit(time=self.timeout)
+        limit = chess.engine.Limit(time=self.timeout)
         result = await self.engine.play(self.board, limit=limit)
         if not result.move:
             # TODO: this should be AI's defeat
@@ -136,7 +135,7 @@ class ChessBoard:
         self.goodLED.on(x, y)
 
         self.turn = chess.BLACK
-        logging.info("Engine returned")
+        logger.debug(f"Engine returned {result.move.uci()}")
 
     def color_at(self, x: int, y: int) -> chess.Color:
         """
@@ -202,6 +201,7 @@ class ChessBoard:
         self.warnLED.on(x, y)
 
         if self.select != None and self.turn == self.color_at(x, y):
+            logger.debug("2+ pieces are missing; Canceling selection")
             x, y = self.select
             await self.on_unselect()
             await self.on_missing(x, y)
@@ -221,12 +221,14 @@ class ChessBoard:
 
         color = self.color_at(x, y)
         if self.turn == color and len(self.in_air[color]) == 1:
+            logger.debug("Only 1 piece remains missing; Enabling selection")
             new_select = next(iter(self.in_air[color]))  # get single element from set
             self.errors -= 1
             self.warnLED.off(*new_select)
             await self.on_select(*new_select)
 
         if self.pending and self.errors == 0:
+            logger.debug("All errors resolved. No longer pending.")
             self.pending = False
             await self.switch_turn()
 
@@ -254,6 +256,7 @@ class ChessBoard:
         self.warnLED.off(x, y)
 
         if self.pending and self.errors == 0:
+            logger.debug("All errors resolved. No longer pending.")
             self.pending = False
             await self.switch_turn()
 
@@ -272,7 +275,7 @@ class ChessBoard:
         to_x, to_y = x, y
         from_x, from_y = self.select
         move = chess.Move(chess.square(from_x, from_y), chess.square(to_x, to_y))
-        logging.info(f"Move: {move.uci()} ({piece})")
+        logger.debug(f"Move: {move.uci()} ({piece})")
 
         self.in_air[self.turn].remove(self.select)
         await self.on_unselect()
@@ -284,7 +287,7 @@ class ChessBoard:
         if piece.piece_type == chess.PAWN:
             # En passant: Pawn moved in X axis without capturing anything
             if from_x != to_x:
-                logging.debug("Special move: En passant")
+                logger.debug("Special move: En passant")
                 # (from_y, to_x): Enemey piece to capture
                 if self.states[from_y][to_x] == MISSING:
                     await self.on_place(to_x, from_y)
@@ -299,13 +302,15 @@ class ChessBoard:
 
             # Promotion: Reached last square (Y==0 or Y==7)
             elif to_y % 7 == 0:
-                logging.debug("Special move: Promotion")
+                logger.debug("Special move: Promotion")
                 move.promotion = chess.QUEEN
 
         elif piece.piece_type == chess.KING:
             dx = to_x - from_x
             if abs(dx) > 1:  # Castling: King moved 2+ squares in X axis
-                logging.debug("Special move: Castling")
+                logger.debug(
+                    f"Special move: {'King' if dx>0 else 'Queen'}side castling"
+                )
                 rook_init = (7 if dx > 0 else 0), to_y
                 rook_after = (to_x - dx // 2), to_y
                 self.in_air[self.turn].add(rook_after)
@@ -317,7 +322,7 @@ class ChessBoard:
         # but moves that manipulate 2 pieces set 'pending' state instead
         self.board.push(move)
         if self.pending:
-            logging.debug("Pending")
+            logger.debug("Move requires 2+ actions. 'pending' state set")
         else:
             await self.switch_turn()
 
@@ -332,8 +337,9 @@ class ChessBoard:
         to_x, to_y = x, y
         from_x, from_y = self.select
         move = chess.Move(chess.square(from_x, from_y), chess.square(to_x, to_y))
-        piece = self.board.piece_at(chess.square(*self.select))
-        print(f"Move: {move.uci()} ({piece})")
+        killer = self.board.piece_at(chess.square(from_x, from_y))
+        victim = self.board.piece_at(chess.square(to_x, to_y))
+        logger.debug(f"Capture: {move.uci()} ({killer} -> {victim})")
 
         self.errors -= 1  # Missing -> Killed
         self.warnLED.off(to_x, to_y)

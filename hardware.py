@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Deals with physical chessboard itself
-Provides interface to LED/Electrode 8x8 matrix
-"""
 import asyncio
 import numpy as np
 import gpiozero as gp

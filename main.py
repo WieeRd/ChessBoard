@@ -2,6 +2,7 @@
 import chess
 import chess.engine
 import asyncio
+import logging
 import numpy as np
 import gpiozero as gp
 
@@ -12,16 +13,16 @@ from itertools import product
 from aioconsole import ainput
 from typing import Callable, Any, List, Optional
 
-import logging
+logging.getLogger("chess.engine").setLevel(logging.INFO)
 logging.basicConfig(
     level=logging.DEBUG,
-    format="[%(levelname)s] (%(module)s) %(message)s"  # %(name)s
+    format="[%(levelname)s] (%(name)s) %(message)s"  # %(name)s
 )
 
 StateChar = {
     sw.EMPTY: ".",
     sw.MISSING: "!",
-    sw.GROUND: "G",
+    sw.GROUND: "+",
     sw.MISPLACE: "?",
     sw.SELECT: "S",
 }
@@ -61,8 +62,8 @@ async def test():
     red = hw.DummyMatrix()
     blue = hw.DummyMatrix()
     turn = ( hw.dummyLED(), hw.dummyLED() )
-    # _, engine = await chess.engine.popen_uci("./stockfish")
-    engine = None
+    _, engine = await chess.engine.popen_uci("./stockfish")
+    # engine = None
 
     game = sw.ChessBoard(blue, red, turn, engine, 4)
     game.states = np.array([
@@ -102,6 +103,9 @@ async def test():
             continue
         except (KeyboardInterrupt, EOFError) as e:
             break
+
+    if engine:
+        await engine.quit()
     print('\n'.join(log))
 
 # async def main():
