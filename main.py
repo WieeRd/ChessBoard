@@ -59,9 +59,9 @@ def game_status(game: sw.ChessBoard, scan_data: np.ndarray) -> str:
     return ret
 
 async def test():
-    red = hw.DummyMatrix()
-    blue = hw.DummyMatrix()
-    turn = ( hw.dummyLED(), hw.dummyLED() )
+    red = hw.LEDmatrix()
+    blue = hw.LEDmatrix()
+    turn = ( hw.DummyLED(), hw.DummyLED() )
     _, engine = await chess.engine.popen_uci("./stockfish")
     # engine = None
 

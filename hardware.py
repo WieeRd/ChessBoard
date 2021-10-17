@@ -2,54 +2,44 @@ import asyncio
 import numpy as np
 import gpiozero as gp
 
-from typing import List, Sequence, Union, Any, Sequence, Tuple, Union
-
-
-class OffsetArray(Sequence):
-    """
-    a: numpy.ndarray
-    b = OffsetArray(a, (1,2))
-    a[i+2][j+1] == b[i][j]
-    """
-
-    def __init__(self, array: np.ndarray, offset: Tuple[int, ...]):
-        if len(array.shape) != len(offset):
-            raise ValueError("Dimension of array and offset doesn't match")
-        self.array = array
-        self.offset = offset
-
-    def __len__(self) -> int:
-        return len(self.array) - self.offset[0]
-
-    def __getitem__(self, index: int) -> Union["OffsetArray", Any]:
-        elem = self.array[index + self.offset[0]]
-        if len(self.array.shape) >= 2:
-            return OffsetArray(elem, self.offset[1:])
-        return elem
-
-    def __setitem__(self, index: int, value):
-        self.array[index + self.offset[0]] = value
-
+from typing import List, Tuple
 
 LED = gp.LED
 Button = gp.Button
 
 
-class dummyLED(LED):
+class DummyLED(LED):
     def __init__(self):
-        pass
+        self._led_state = False
 
     def on(self):
-        pass
+        self._led_state = True
 
     def off(self):
-        pass
+        self._led_state = False
 
     def close(self):
         pass
 
+    @property
+    def value(self) -> bool:
+        return self._led_state
 
-class Electrode:
+
+class Matrix:
+    data: np.ndarray
+
+    def status(self, on: str, off: str) -> str:
+        ret = []
+        for row in self.data:
+            ret.append(" ".join((on if col else off) for col in row))
+        return "\n".join(ret)
+
+    def __str__(self) -> str:
+        return self.status("O", ".")
+
+
+class Electrode(Matrix):
     def __init__(self, send: List[LED], recv: List[Button]):
         self.data = np.full((len(send), len(recv)), False)
         self.send = send
@@ -73,11 +63,10 @@ class Electrode:
         return diff
 
 
-class LEDmatrix:
+class LEDmatrix(Matrix):
     """
-    Base class for LED matrix controlling
-    Modifity data with on(), off(), toggle()
-    apply it with flush()
+    Base class for LED matrix control.
+    By default methods do nothing but store data
     """
 
     def __init__(self):
@@ -96,13 +85,6 @@ class LEDmatrix:
         pass
 
 
-class DummyMatrix(LEDmatrix):
-    """
-    Virtual device that doesn't do anything
-    other than just storing LED states
-    """
-
-
 try:
     from luma.core.interface.serial import spi, noop  # type: ignore
     from luma.core.render import canvas  # type: ignore
@@ -113,16 +95,16 @@ else:
     LUMA = True
 
     class MatrixChain(LEDmatrix):
-        """Controls multiple daisy-chained max7219 LED matrix"""
+        """
+        Control multiple daisy-chained max7219 LED matrix
+        """
 
-        data: np.ndarray
-
-        def __init__(self, serial: spi, chained: int = 1):
-            self.chained = chained
-            self.device = max7219(serial, cascaded=chained)
+        def __init__(self, serial: spi, cascaded: int = 1):
+            self.cascaded = cascaded
+            self.device = max7219(serial, cascaded=cascaded)
 
             self.height = 8
-            self.width = 8 * chained
+            self.width = 8 * cascaded
 
             self.data = np.full((self.height, self.width), False)
 
@@ -134,13 +116,14 @@ else:
                             draw.point((x, y), fill="white")
 
     class SingleMatrix(LEDmatrix):
-        """Control single LED matrix in MatrixChain"""
-
-        data: OffsetArray
+        """
+        Control single LED matrix in MatrixChain
+        """
 
         def __init__(self, chain: MatrixChain, offset: int):
             self.chain = chain
-            self.data = OffsetArray(self.chain.data, (0, offset * 8))
+            self.offset = offset
+            self.data = np.array([row[offset:] for row in chain.data])
 
         def flush(self):
             self.chain.flush()
