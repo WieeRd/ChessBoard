@@ -1,0 +1,5 @@
+chess
+numpy
+gpiozero
+aioconsole
+luma.led_matrix

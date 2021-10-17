@@ -16,7 +16,7 @@ from typing import Callable, Any, List, Optional
 logging.getLogger("chess.engine").setLevel(logging.INFO)
 logging.basicConfig(
     level=logging.DEBUG,
-    format="[%(levelname)s] (%(name)s) %(message)s"  # %(name)s
+    format="[%(levelname)s] (%(name)s) %(message)s"
 )
 
 StateChar = {
@@ -53,7 +53,7 @@ def game_status(game: sw.ChessBoard, scan_data: np.ndarray) -> str:
     team = {0: 'Black', 1: 'White', None:'Preparing'}
     ret += "  a b c d e f g h  "
     ret += "T:{} | P:{} | E:{} | aW:{}, aB:{}".format(
-        team[game.turn], game.pending, game.errors, len(game.in_air[1]), len(game.in_air[0])
+        team[game.turn], game.pending, game.errors, len(game.lifted[1]), len(game.lifted[0])
     )
 
     return ret
@@ -140,4 +140,5 @@ async def test():
 
 if __name__=="__main__":
     asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
-    asyncio.run(test())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(test())
