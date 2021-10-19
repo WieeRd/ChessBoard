@@ -146,6 +146,9 @@ else:
 
             self.data = np.full((self.height, self.width), False)
 
+        def __getitem__(self, offset: int):
+            return SingleMatrix(self, offset)
+
         def flush(self):
             with canvas(self.device) as draw:
                 for y in range(self.height):
@@ -153,7 +156,6 @@ else:
                         if self.data[y][x]:
                             draw.point((x, y), fill="white")
 
-    # TODO: get SingleMatrix from MatrixChain using [] operator
     class SingleMatrix(LEDmatrix):
         """
         Control single LED matrix in MatrixChain
