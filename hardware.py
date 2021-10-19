@@ -27,9 +27,9 @@ class DummyLED(gp.LED):
         return self._led_state
 
 
-class IOpin:
+class IODevice:
     """
-    GPIO class that can do both input and output
+    GPIO device that can do both input and output
     """
 
     _input: gp.InputDevice
@@ -57,7 +57,7 @@ class IOpin:
         return self._input.value
 
 
-class Matrix:
+class MatrixBase:
     data: np.ndarray
 
     def status(self, on: str, off: str) -> str:
@@ -70,8 +70,11 @@ class Matrix:
         return self.status("O", ".")
 
 
-class Electrode(Matrix):
-    def __init__(self, send: List[gp.OutputDevice], recv: List[gp.InputDevice]):
+class Electrode(MatrixBase):
+    def __init__(self, send: List[gp.OutputDevice], recv: List[IODevice]):
+        """
+        Make sure recv[0] is closest row to sending side
+        """
         self.data = np.full((len(send), len(recv)), False)
         self.send = send
         self.recv = recv
@@ -82,22 +85,26 @@ class Electrode(Matrix):
         for y, send in enumerate(self.send):
             send.on()
 
-            await asyncio.sleep(0.001)
             for x, recv in enumerate(self.recv):
-                read = recv.value
+                await asyncio.sleep(0.001)
+                read = recv.read()
                 if self.data[y][x] != read:
                     self.data[y][x] = read
                     diff.append((x, y))
+                recv.on()
+
+            # for recv in self.recv:
+            #     recv.off()
 
             send.off()
 
         return diff
 
 
-class LEDmatrix(Matrix):
+class LEDmatrix(MatrixBase):
     """
     Base class for LED matrix control.
-    By default methods do nothing but store data
+    By default methods just store state data
     """
 
     def __init__(self):
