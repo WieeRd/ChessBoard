@@ -4,6 +4,7 @@ import asyncio
 import logging
 import functools
 import numpy as np
+import gpiozero as gp
 import hardware as hw
 
 from enum import Flag, auto
@@ -53,7 +54,7 @@ class ChessBoard:
         self,
         goodLED: hw.LEDmatrix,
         warnLED: hw.LEDmatrix,
-        turnLED: Tuple[hw.LED, hw.LED],
+        turnLED: Tuple[gp.LED, gp.LED],
         engine: chess.engine.UciProtocol = None,
         timeout: float = 1.0,
     ):
@@ -100,18 +101,24 @@ class ChessBoard:
 
     def info(self) -> str:
         """
-        Brief information of what's going on
-        T:Black | P:False | E:3 | L(B):1 | L(W):2
+        Brief information of what's going on.
+        ex) T:Black | P:False | E:3 | L(B):1 | L(W):2
         """
         if self.turn != None:
             T = ("Black", "White")[self.turn]
         else:
-            T = "None"
+            T = "None "
         P = str(self.pending)
         E = str(self.errors)
-        b, w = self.lifted
-        LB, LW = len(b), len(w)
+        LB, LW = len(self.lifted[0]), len(self.lifted[1])
         return f"T:{T} | P:{P} | E:{E} | L(B):{LB} | L(W):{LW}"
+
+    def status(self) -> str:
+        # Chess board 
+        # LED Matrix
+        # States
+        # Detected
+        ...
 
     def color_at(self, x: int, y: int) -> chess.Color:
         """
@@ -312,16 +319,20 @@ class ChessBoard:
             if from_x != to_x:
                 logger.debug("Special move: En passant")
                 # (from_y, to_x): Enemey piece to capture
-                if self.states[from_y][to_x] == MISSING:
+
+                # # legacy code (past myself wrote something I don't understand)
+                # if self.states[from_y][to_x] == MISSING:
+                #     await self.on_place(to_x, from_y)
+                # await self.on_misplace(to_x, from_y)
+                # self.pending = True
+
+                # TODO: not tested
+                if self.states[from_y][to_x] == GROUND:
+                    await self.on_misplace(to_x, from_y)
+                    self.pending = True
+                elif self.states[from_y][to_x] == MISSING:
                     await self.on_place(to_x, from_y)
-                await self.on_misplace(to_x, from_y)
-
-                # # TODO: test this
-                # if self.states[from_y][to_x] != MISSING:
-                #     await self.on_misplace(to_x, from_y)
-                #     self.pending = True
-
-                self.pending = True
+                    self.states[from_y][to_x] = EMPTY
 
             # Promotion: Reached last square (Y==0 or Y==7)
             elif to_y % 7 == 0:
