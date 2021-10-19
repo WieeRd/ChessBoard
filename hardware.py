@@ -4,11 +4,12 @@ import gpiozero as gp
 
 from typing import List, Tuple
 
-LED = gp.LED
-Button = gp.Button
 
+class DummyLED(gp.LED):
+    """
+    Inherited from gpiozero.LED but methods do nothing
+    """
 
-class DummyLED(LED):
     def __init__(self):
         self._led_state = False
 
@@ -26,6 +27,36 @@ class DummyLED(LED):
         return self._led_state
 
 
+class IOpin:
+    """
+    GPIO class that can do both input and output
+    """
+
+    _input: gp.InputDevice
+    _output: gp.OutputDevice
+
+    def __init__(self, pin: int):
+        self.pin = pin
+
+    def on(self):
+        if hasattr(self, "_input"):
+            del self._input
+            self._output = gp.OutputDevice(self.pin)
+        self._output.on()
+
+    def off(self):
+        if hasattr(self, "_input"):
+            del self._input
+            self._output = gp.OutputDevice(self.pin)
+        self._output.off()
+
+    def read(self) -> int:
+        if hasattr(self, "_output"):
+            del self._output
+            self._input = gp.InputDevice(self.pin, pull_up=True)
+        return self._input.value
+
+
 class Matrix:
     data: np.ndarray
 
@@ -40,7 +71,7 @@ class Matrix:
 
 
 class Electrode(Matrix):
-    def __init__(self, send: List[LED], recv: List[Button]):
+    def __init__(self, send: List[gp.OutputDevice], recv: List[gp.InputDevice]):
         self.data = np.full((len(send), len(recv)), False)
         self.send = send
         self.recv = recv
@@ -115,6 +146,7 @@ else:
                         if self.data[y][x]:
                             draw.point((x, y), fill="white")
 
+    # TODO: get SingleMatrix from MatrixChain using [] operator
     class SingleMatrix(LEDmatrix):
         """
         Control single LED matrix in MatrixChain
