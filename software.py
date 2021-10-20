@@ -13,6 +13,15 @@ from typing import List, Optional, Set, Tuple
 logger = logging.getLogger(__name__)
 
 
+def event(func):
+    @functools.wraps(func)
+    def ret(*args):
+        logger.info(f"Event: {func.__name__}{args[1:]}")
+        return func(*args)
+
+    return ret
+
+
 class State(Flag):
     NONE = 0
     DETECTED = auto()
@@ -31,15 +40,6 @@ class GameOverError(Exception):
     def __init__(self, reason: chess.Outcome):
         super().__init__(f"Game Over! {reason.result()} ({reason.termination.name})")
         self.reason = reason
-
-
-def event(func):
-    @functools.wraps(func)
-    def ret(*args):
-        logger.info(f"Event: {func.__name__}{args[1:]}")
-        return func(*args)
-
-    return ret
 
 
 class ChessBoard:
@@ -87,7 +87,10 @@ class ChessBoard:
         self.lifted: Tuple[Set[Pos], Set[Pos]] = set(), set()
         # error count (missing + misplace)
         self.errors: int = 0
-        # TODO: I have no idea how to explain this
+        # when a move requires more than 2 actions,
+        # 'pending' state is set instead of switch_turn().
+        # when all errors are resolved (errors == 0),
+        # switch_turn() is called and pending is unset
         self.pending: bool = True
 
         # position of currently selected piece
@@ -102,7 +105,7 @@ class ChessBoard:
     def info(self) -> str:
         """
         Brief information of what's going on.
-        ex) T:Black | P:False | E:3 | L(B):1 | L(W):2
+        ex) T:Black | P:False | E:3 | L(B):1, L(W):2
         """
         if self.turn != None:
             T = ("Black", "White")[self.turn]
@@ -111,14 +114,10 @@ class ChessBoard:
         P = str(self.pending)
         E = str(self.errors)
         LB, LW = len(self.lifted[0]), len(self.lifted[1])
-        return f"T:{T} | P:{P} | E:{E} | L(B):{LB} | L(W):{LW}"
+        return f"T:{T} | P:{P} | E:{E} | L(B):{LB}, L(W):{LW}"
 
     def status(self) -> str:
-        # Chess board 
-        # LED Matrix
-        # States
-        # Detected
-        ...
+        ... # TODO
 
     def color_at(self, x: int, y: int) -> chess.Color:
         """
@@ -144,8 +143,9 @@ class ChessBoard:
         limit = chess.engine.Limit(time=self.timeout)
         result = await self.engine.play(self.board, limit=limit)
         if not result.move:
-            # TODO: this should be AI's defeat
-            raise RuntimeError("Engine returned None")
+            # engine gave up for some reason?
+            reason = chess.Outcome(chess.Termination.VARIANT_WIN, chess.WHITE)
+            raise GameOverError(reason)
 
         square = result.move.from_square
         x, y = square % 8, square // 8
@@ -168,9 +168,9 @@ class ChessBoard:
         self.turnLED[not self.turn].off()
         self.legal_moves = list(self.board.legal_moves)
 
-        result = self.board.outcome()
-        if result != None:
-            raise GameOverError(result)
+        outcome = self.board.outcome()
+        if outcome != None:
+            raise GameOverError(outcome )
 
         if self.engine != None:
             if self.turn == chess.BLACK:  # AI's turn
@@ -195,7 +195,7 @@ class ChessBoard:
             for m in filter(lambda m: m.from_square == selected, self.legal_moves)
         ]
 
-        # TODO: highlight source square as well
+        self.goodLED.on(x, y)
         for x, y in self.candidates:
             self.goodLED.on(x, y)
 
@@ -213,6 +213,8 @@ class ChessBoard:
         self.states[y][x] = GROUND
         self.select = None
 
+        if not self.AIselect:
+            self.goodLED.off(x, y)
         for x, y in self.candidates:
             self.goodLED.off(x, y)
         self.candidates = []
@@ -328,9 +330,12 @@ class ChessBoard:
 
                 # TODO: not tested
                 if self.states[from_y][to_x] == GROUND:
+                    # enemy pawn has to be removed
                     await self.on_misplace(to_x, from_y)
                     self.pending = True
+
                 elif self.states[from_y][to_x] == MISSING:
+                    # already removed, cancel missing state
                     await self.on_place(to_x, from_y)
                     self.states[from_y][to_x] = EMPTY
 
