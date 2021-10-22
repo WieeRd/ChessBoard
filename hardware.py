@@ -71,10 +71,7 @@ class MatrixBase:
 
 
 class Electrode(MatrixBase):
-    def __init__(self, send: List[gp.OutputDevice], recv: List[IODevice]):
-        """
-        Make sure recv[0] is closest row to sending side
-        """
+    def __init__(self, send: List[gp.OutputDevice], recv: List[gp.InputDevice]):
         self.data = np.full((len(send), len(recv)), False)
         self.send = send
         self.recv = recv
@@ -85,16 +82,12 @@ class Electrode(MatrixBase):
         for y, send in enumerate(self.send):
             send.on()
 
+            await asyncio.sleep(0.001)
             for x, recv in enumerate(self.recv):
-                await asyncio.sleep(0.001)
-                read = recv.read()
+                read = recv.value
                 if self.data[y][x] != read:
                     self.data[y][x] = read
                     diff.append((x, y))
-                recv.on()
-
-            # for recv in self.recv:
-            #     recv.off()
 
             send.off()
 
