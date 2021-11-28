@@ -7,7 +7,7 @@ import numpy as np
 import gpiozero as gp
 import hardware as hw
 
-from enum import Flag, auto
+from enum import IntFlag
 from typing import List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
@@ -16,22 +16,23 @@ logger = logging.getLogger(__name__)
 def event(func):
     @functools.wraps(func)
     def ret(*args):
-        logger.info(f"Event: {func.__name__}{args[1:]}")
+        logger.debug(f"Event: {func.__name__}{args[1:]}")
         return func(*args)
 
     return ret
 
 
-class State(Flag):
+class State(IntFlag):
     NONE = 0
-    DETECTED = auto()
-    ERROR = auto()
-    CHOSEN = auto()
+    DETECTED = 1
+    ERROR = 2
+    CHOSEN = 4
 
 
+# 0, 1, 2, 3, 4
 EMPTY = State.NONE
-MISSING = State.ERROR
 GROUND = State.DETECTED
+MISSING = State.ERROR
 MISPLACE = State.DETECTED | State.ERROR
 SELECT = State.CHOSEN
 
@@ -69,7 +70,8 @@ class ChessBoard:
                 [EMPTY] * 8,
                 [MISSING] * 8,
                 [MISSING] * 8,
-            ]
+            ],
+            dtype=np.uint8,
         )
 
         self.goodLED = goodLED
@@ -101,23 +103,6 @@ class ChessBoard:
         self.legal_moves: List[chess.Move] = []
         # positions currently selected piece can go to
         self.candidates: List[Pos] = []
-
-    def info(self) -> str:
-        """
-        Brief information of what's going on.
-        ex) T:Black | P:False | E:3 | L(B):1, L(W):2
-        """
-        if self.turn != None:
-            T = ("Black", "White")[self.turn]
-        else:
-            T = "None "
-        P = str(self.pending)
-        E = str(self.errors)
-        LB, LW = len(self.lifted[0]), len(self.lifted[1])
-        return f"T:{T} | P:{P} | E:{E} | L(B):{LB}, L(W):{LW}"
-
-    def status(self) -> str:
-        ... # TODO
 
     def color_at(self, x: int, y: int) -> chess.Color:
         """
@@ -170,7 +155,7 @@ class ChessBoard:
 
         outcome = self.board.outcome()
         if outcome != None:
-            raise GameOverError(outcome )
+            raise GameOverError(outcome)
 
         if self.engine != None:
             if self.turn == chess.BLACK:  # AI's turn
@@ -444,3 +429,43 @@ class ChessBoard:
             await self.on_lift(x, y)
         else:
             await self.on_place(x, y)
+
+    def game_info(self) -> str:
+        """
+        Brief information of what's going on.
+        ex) T:Black | P:False | E:3 | L(B):1, L(W):2
+        """
+        if self.turn != None:
+            T = ("Black", "White")[self.turn]
+        else:
+            T = "None "
+        P = str(self.pending)
+        E = str(self.errors)
+        LB, LW = len(self.lifted[0]), len(self.lifted[1])
+        return f"T:{T} | P:{P} | E:{E} | L(B):{LB}, L(W):{LW}"
+
+    def led_info(self) -> str:
+        """
+        String representation of LED matricies.
+        good: Blue / warn: Red / both: Purple
+        """
+        char = ".BRP"
+        data = self.goodLED.data + self.warnLED.data * 2
+
+        ret = []
+        for row in reversed(data):  # because A1 is at bottom left
+            ret.append(" ".join(char[col] for col in row))
+        return "\n".join(ret)
+
+    def state_info(self) -> str:
+        """
+        String representation of tile states.
+        EMPTY, GROUND, MISSING, MISPLACE, SELECT states
+        are shown as ['.', 'G', '?', '!', 'S'], respectively
+        """
+        char = ".G?!S"
+
+        ret = []
+        for row in reversed(self.states):  # because A1 is at bottom left
+            ret.append(" ".join(char[col] for col in row))
+        return "\n".join(ret)

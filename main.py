@@ -9,92 +9,74 @@ import gpiozero as gp
 import hardware as hw
 import software as sw
 
-from itertools import product
 from aioconsole import ainput
-from typing import Callable, Any, List, Optional
+
+# TODO: Dummy Electrode
+# TODO: Seperate test.py
 
 logging.getLogger("chess.engine").setLevel(logging.INFO)
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="[%(levelname)s] (%(name)s) %(message)s"
+    level=logging.DEBUG, format="[%(levelname)s] (%(name)s) %(message)s"
 )
 
-StateChar = {
-    sw.EMPTY: ".",
-    sw.MISSING: "!",
-    sw.GROUND: "+",
-    sw.MISPLACE: "?",
-    sw.SELECT: "S",
-}
 
+def game_status(game: sw.ChessBoard, scanner: hw.MatrixBase) -> str:
+    board = str(game.board).split(sep="\n")
+    led = game.led_info().split(sep="\n")
+    scan = scanner.status("@", ".").split(sep="\n")
+    tile = game.state_info().split(sep="\n")
+    info = game.game_info()
 
-def gen_status_str(data: np.ndarray, what: Callable[[Any], str]) -> str:
     ret = []
-    for row in data:
-        ret.append(' '.join(what(col) for col in row))
-    return '\n'.join(ret)
-
-def game_status(game: sw.ChessBoard, scan_data: np.ndarray) -> str:
-    color = ['.', 'B', 'R', 'P']
-    ledData = np.empty((8,8), dtype=np.int8) # TODO: inefficient
-    for y, x in product(range(8), range(8)):
-        ledData[y][x] = game.goodLED.data[y][x] + game.warnLED.data[y][x]*2
-
-    tile = gen_status_str(game.states, lambda x: StateChar[x]).split(sep='\n')
-    board = str(game.board).split(sep='\n')
-    scan = gen_status_str(scan_data, lambda x: '@' if x else '.').split(sep='\n')
-    led = gen_status_str(ledData, lambda x: color[x]).split(sep='\n')
-
-    ret = ""
     for i in range(8):
-        ret += str(8-i) + ' '
-        ret += '  '.join((board[i], led[7-i], scan[7-i], tile[7-i]))
-        ret += '\n'
-    team = {0: 'Black', 1: 'White', None:'Preparing'}
-    ret += "  a b c d e f g h  "
-    ret += "T:{} | P:{} | E:{} | aW:{}, aB:{}".format(
-        team[game.turn], game.pending, game.errors, len(game.lifted[1]), len(game.lifted[0])
-    )
+        ret.append(f"{str(8-i)} {board[i]}  {led[i]}  {tile[i]}  {scan[7-i]}")
+    ret.append(f"  a b c d e f g h  {info}")
+    return "\n".join(ret)
 
-    return ret
 
 async def test():
     red = hw.LEDmatrix()
     blue = hw.LEDmatrix()
-    turn = ( hw.DummyLED(), hw.DummyLED() )
+    turn = (hw.DummyLED(), hw.DummyLED())
     _, engine = await chess.engine.popen_uci("./stockfish")
     # engine = None
 
     game = sw.ChessBoard(blue, red, turn, engine, 4)
-    game.states = np.array([
-        [sw.GROUND]*8,
-        [sw.GROUND]*8,
-        [sw.EMPTY]*8,
-        [sw.EMPTY]*8,
-        [sw.EMPTY]*8,
-        [sw.EMPTY]*8,
-        [sw.GROUND]*8,
-        [sw.GROUND]*8,
-    ])
-    scan = np.array([
-        [True]*8,
-        [True]*8,
-        [False]*8,
-        [False]*8,
-        [False]*8,
-        [False]*8,
-        [True]*8,
-        [True]*8,
-    ])
+    game.states = np.array(
+        [
+            [sw.GROUND] * 8,
+            [sw.GROUND] * 8,
+            [sw.EMPTY] * 8,
+            [sw.EMPTY] * 8,
+            [sw.EMPTY] * 8,
+            [sw.EMPTY] * 8,
+            [sw.GROUND] * 8,
+            [sw.GROUND] * 8,
+        ]
+    )
+    scanner = hw.MatrixBase()
+    scanner.data = np.array(
+        [
+            [True] * 8,
+            [True] * 8,
+            [False] * 8,
+            [False] * 8,
+            [False] * 8,
+            [False] * 8,
+            [True] * 8,
+            [True] * 8,
+        ]
+    )
 
-    log: List[str] = []
+    log = []
     while True:
-        print(game_status(game, scan))
+        print(game_status(game, scanner))
+        print()
         try:
             cmd = await ainput(";) ")
             square = chess.parse_square(cmd)
             y, x = divmod(square, 8)
-            scan[y][x] = not scan[y][x]
+            scanner.data[y][x] = not scanner.data[y][x]
             await game.toggle(x, y)
             log.append(chess.square_name(square))
         except ValueError as e:
@@ -106,7 +88,8 @@ async def test():
 
     if engine:
         await engine.quit()
-    print('\n'.join(log))
+    print("\n".join(log))
+
 
 # async def main():
 #     if not hw.LUMA:
@@ -138,7 +121,7 @@ async def test():
 
 #     # TODO: Ending event
 
-if __name__=="__main__":
+if __name__ == "__main__":
     asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
     loop = asyncio.get_event_loop()
     loop.run_until_complete(test())

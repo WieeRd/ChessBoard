@@ -117,9 +117,10 @@ class LEDmatrix(MatrixBase):
 
 
 try:
-    from luma.core.interface.serial import spi, noop  # type: ignore
-    from luma.core.render import canvas  # type: ignore
-    from luma.led_matrix.device import max7219  # type: ignore
+    # looks like luma can be only installed on RPI.
+    from luma.core.interface.serial import spi, noop  # type: ignore [reportMissingImports]
+    from luma.core.render import canvas  # type: ignore [reportMissingImports]
+    from luma.led_matrix.device import max7219  # type: ignore [reportMissingImports]
 except ImportError:
     LUMA = False
 else:
