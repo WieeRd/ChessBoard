@@ -37,7 +37,7 @@ def game_status(game: sw.ChessBoard, scanner: hw.MatrixBase) -> str:
 async def test():
     red = hw.LEDmatrix()
     blue = hw.LEDmatrix()
-    turn = (hw.DummyLED(), hw.DummyLED())
+    turn = hw.VirtualLED(), hw.VirtualLED()
     _, engine = await chess.engine.popen_uci("./stockfish")
     # engine = None
 
@@ -54,7 +54,7 @@ async def test():
             [sw.GROUND] * 8,
         ]
     )
-    scanner = hw.MatrixBase()
+    scanner = hw.Scanner()
     scanner.data = np.array(
         [
             [True] * 8,
@@ -70,7 +70,7 @@ async def test():
 
     log = []
     while True:
-        print(game_status(game, scanner))
+        print(game.info(scanner))
         print()
         try:
             cmd = await ainput(";) ")

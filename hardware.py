@@ -6,9 +6,10 @@ from aioconsole import ainput
 from typing import List, Tuple
 
 
-class DummyLED(gp.LED):
+class VirtualLED(gp.LED):
     """
-    Inherited from gpiozero.LED but methods do nothing
+    Dummy GPIO LED class used for testing
+    Methods just store device state data
     """
 
     def __init__(self):
@@ -67,16 +68,22 @@ class MatrixBase:
             ret.append(" ".join((on if col else off) for col in row))
         return "\n".join(ret)
 
+    def __repr__(self) -> str:
+        return str(self.data)
+
     def __str__(self) -> str:
         return self.status("O", ".")
 
 
 class Scanner(MatrixBase):
     """
-    Find out which squares has piece on it
+    Find out which squares have piece on it
     """
 
     async def scan(self) -> List[Tuple[int, int]]:
+        """
+        Returns list of squares that has changed since last scan
+        """
         raise NotImplementedError
 
 
@@ -106,6 +113,7 @@ class Electrode(Scanner):
 
 class ConsoleInput(Scanner):
     def __init__(self, prompt: str):
+        self.data = np.full((8, 8), False)
         self.prompt = prompt
 
     async def scan(self) -> List[Tuple[int, int]]:
@@ -117,6 +125,7 @@ class ConsoleInput(Scanner):
             x = ord(file) - 97  # 'a' -> 0
             y = int(rank) - 1  # '1' -> 0
             diff.append((x, y))
+            self.data[y][x] = not self.data[y][x]
         
         return diff
 
