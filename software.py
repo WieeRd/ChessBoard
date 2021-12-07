@@ -469,3 +469,9 @@ class ChessBoard:
         for row in reversed(self.states):  # because A1 is at bottom left
             ret.append(" ".join(char[col] for col in row))
         return "\n".join(ret)
+
+    def info(self, scanner: hw.Scanner) -> str:
+        ...  # copy main.py's game_status
+
+    async def play(self, scanner: hw.Scanner):
+        ...  # TODO

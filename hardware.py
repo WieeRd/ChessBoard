@@ -2,6 +2,7 @@ import asyncio
 import numpy as np
 import gpiozero as gp
 
+from aioconsole import ainput
 from typing import List, Tuple
 
 
@@ -70,7 +71,16 @@ class MatrixBase:
         return self.status("O", ".")
 
 
-class Electrode(MatrixBase):
+class Scanner(MatrixBase):
+    """
+    Find out which squares has piece on it
+    """
+
+    async def scan(self) -> List[Tuple[int, int]]:
+        raise NotImplementedError
+
+
+class Electrode(Scanner):
     def __init__(self, send: List[gp.OutputDevice], recv: List[gp.InputDevice]):
         self.data = np.full((len(send), len(recv)), False)
         self.send = send
@@ -91,6 +101,23 @@ class Electrode(MatrixBase):
 
             send.off()
 
+        return diff
+
+
+class ConsoleInput(Scanner):
+    def __init__(self, prompt: str):
+        self.prompt = prompt
+
+    async def scan(self) -> List[Tuple[int, int]]:
+        diff = []
+
+        line = await ainput(self.prompt)
+        for word in line.split():
+            file, rank = word
+            x = ord(file) - 97  # 'a' -> 0
+            y = int(rank) - 1  # '1' -> 0
+            diff.append((x, y))
+        
         return diff
 
 
