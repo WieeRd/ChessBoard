@@ -203,18 +203,18 @@ class ChessBoard:
     @event
     async def switch_turn(self):
         """
-        1. Update turnLED state
-        2. Check if the game is over & raise GameOverError(Outcome)
+        1. Check if the game is over & raise GameOverError
+        2. Update turnLED state
         3. If engine is given & AI's turn, run_engine is called
         """
+        outcome = self.board.outcome()
+        if outcome != None:
+            raise GameOverError(outcome)
+
         self.turn = not self.turn
         self.turnLED[self.turn].on()
         self.turnLED[not self.turn].off()
         self.legal_moves = list(self.board.legal_moves)
-
-        outcome = self.board.outcome()
-        if outcome != None:
-            raise GameOverError(outcome)
 
         if self.engine != None:
             if self.turn == chess.BLACK:  # AI's turn
@@ -489,5 +489,5 @@ class ChessBoard:
         else:
             await self.on_place(x, y)
 
-    async def play(self, scanner: hw.Scanner):
+    async def play(self):
         ...  # TODO
