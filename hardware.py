@@ -113,8 +113,19 @@ class Electrode(Scanner):
 
 class ConsoleInput(Scanner):
     def __init__(self, prompt: str):
-        self.data = np.full((8, 8), False)
         self.prompt = prompt
+        self.data = np.array(
+            [
+                [True] * 8,
+                [True] * 8,
+                [False] * 8,
+                [False] * 8,
+                [False] * 8,
+                [False] * 8,
+                [True] * 8,
+                [True] * 8,
+            ]
+        )
 
     async def scan(self) -> List[Tuple[int, int]]:
         diff = []
