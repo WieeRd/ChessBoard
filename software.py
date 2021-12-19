@@ -221,6 +221,7 @@ class ChessBoard:
                 asyncio.create_task(self.run_engine())
             elif self.turn == chess.WHITE and self.AIselect:
                 self.goodLED.off(*self.AIselect)
+                self.AIselect = None
 
     @event
     async def on_select(self, x: int, y: int):
