@@ -88,10 +88,10 @@ class Scanner(MatrixBase):
 
 
 class Electrode(Scanner):
-    def __init__(self, send: List[gp.OutputDevice], recv: List[gp.InputDevice]):
+    def __init__(self, send: List[int], recv: List[int], pull_up=True):
         self.data = np.full((len(send), len(recv)), False)
-        self.send = send
-        self.recv = recv
+        self.send = [gp.OutputDevice(pin) for pin in send]
+        self.recv = [gp.InputDevice(pin, pull_up=pull_up) for pin in recv]
 
     async def scan(self) -> List[Tuple[int, int]]:
         diff = []
@@ -137,7 +137,7 @@ class ConsoleInput(Scanner):
             y = int(rank) - 1  # '1' -> 0
             diff.append((x, y))
             self.data[y][x] = not self.data[y][x]
-        
+
         return diff
 
 
@@ -186,6 +186,9 @@ else:
             self.width = 8 * cascaded
 
             self.data = np.full((self.height, self.width), False)
+
+        def __len__(self) -> int:
+            return self.cascaded
 
         def __getitem__(self, offset: int):
             return SingleMatrix(self, offset)

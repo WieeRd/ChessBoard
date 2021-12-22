@@ -22,27 +22,23 @@ def event(func):
     return ret
 
 
+# fmt: off
 class State(IntFlag):
-    NONE = 0
-    DETECTED = 1
-    ERROR = 2
-    CHOSEN = 4
+    NONE   = 0
+    GROUND = 1
+    ERROR  = 2
+    SELECT = 4
 
 
-# 0, 1, 2, 3, 4
-EMPTY = State.NONE
-GROUND = State.DETECTED
-MISSING = State.ERROR
-MISPLACE = State.DETECTED | State.ERROR
-SELECT = State.CHOSEN
+EMPTY    = State.NONE     | State.NONE   # 0
+GROUND   = State.GROUND   | State.NONE   # 1
+MISSING  = State.NONE     | State.ERROR  # 2
+MISPLACE = State.GROUND   | State.ERROR  # 3
+SELECT   = State.SELECT                  # 4
+# fmt: on
 
 
-class GameOverError(Exception):
-    def __init__(self, reason: chess.Outcome):
-        super().__init__(f"Game Over! {reason.result()} ({reason.termination.name})")
-        self.reason = reason
-
-
+# TODO: rewrite docstring
 class ChessBoard:
     """
     Controls LED chessboard based on occured events.
@@ -105,6 +101,8 @@ class ChessBoard:
         self.legal_moves: List[chess.Move] = []
         # positions currently selected piece can go to
         self.candidates: List[Pos] = []
+        # updated each time switch_turn() is called
+        self.outcome: Optional[chess.Outcome] = None
 
     def _led_str(self) -> List[str]:
         """
@@ -188,8 +186,8 @@ class ChessBoard:
 
         if not result.move:
             # engine gave up for some reason?
-            reason = chess.Outcome(chess.Termination.VARIANT_WIN, chess.WHITE)
-            raise GameOverError(reason)
+            logger.debug(f"Engine result: {repr(result)}")
+            raise RuntimeError("Engine result doesn't contain any move")
 
         square = result.move.from_square
         x, y = square % 8, square // 8
@@ -203,13 +201,14 @@ class ChessBoard:
     @event
     def switch_turn(self):
         """
-        1. Check if the game is over & raise GameOverError
+        1. Update game outcome
         2. Update turnLED state
         3. If engine is given & AI's turn, run_engine is called
         """
-        outcome = self.board.outcome()
-        if outcome != None:
-            raise GameOverError(outcome)
+        self.outcome = self.board.outcome()
+        if self.outcome != None:
+            self.legal_moves = []
+            return
 
         self.turn = not self.turn
         self.turnLED[self.turn].on()
@@ -445,7 +444,7 @@ class ChessBoard:
         Raise GameOverError if the event ended the game
         """
         state = self.states[y][x]
-        assert state & State.DETECTED
+        assert state & State.GROUND
         if state == GROUND:
             color = self.color_at(x, y)
             self.lifted[color].add((x, y))
@@ -466,7 +465,7 @@ class ChessBoard:
         Raise GameOverError if the event ended the game
         """
         state = self.states[y][x]
-        assert not (state & State.DETECTED)
+        assert not (state & State.GROUND)
         if state == EMPTY:
             if (x, y) in self.candidates:
                 self.on_move(x, y)
@@ -488,10 +487,7 @@ class ChessBoard:
         Invoke on_place or on_lift at (x, y)
         based on State.DETECTED of that tile
         """
-        if self.states[y][x] & State.DETECTED:
+        if self.states[y][x] & State.GROUND:
             self.on_lift(x, y)
         else:
             self.on_place(x, y)
-
-    async def play(self):
-        ...  # TODO

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import chess
 import chess.engine
 import asyncio
@@ -12,9 +13,6 @@ logging.basicConfig(
 )
 
 
-# TODO: only on_place & on_lift have to be async
-# TODO: rewrite docstring
-
 async def test():
     red = hw.LEDmatrix()
     blue = hw.LEDmatrix()
@@ -24,10 +22,12 @@ async def test():
 
     game = sw.ChessBoard(blue, red, turn, scanner, engine)
 
-    while True:
+    while game.outcome == None:
         for x, y in await scanner.scan():
             game.toggle(x, y)
             print(game, end="\n\n")
+
+    await engine.quit()
 
 
 asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
