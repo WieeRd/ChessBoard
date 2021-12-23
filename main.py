@@ -20,8 +20,8 @@ async def main():
         logging.error("Library 'luma' is missing")
         raise ImportError("Library 'luma' is missing")
 
-    serial = hw.spi(port=0, device=0, gpio=hw.noop())
-    red, blue = hw.MatrixChain(serial, cascaded=2)
+    chain = hw.MatrixChain(port=0, device=0, cascaded=2)
+    red, blue = chain[0], chain[1]
     turn = gp.LED(1), gp.LED(2)
     scanner = hw.Electrode([3, 4, 5], [6, 7, 8])
     _, engine = await chess.engine.popen_uci("./stockfish")

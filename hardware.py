@@ -3,7 +3,7 @@ import numpy as np
 import gpiozero as gp
 
 from aioconsole import ainput
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 
 class VirtualLED(gp.LED):
@@ -60,7 +60,7 @@ class IODevice:
 
 
 class MatrixBase:
-    data: np.ndarray
+    data: Union[List, np.ndarray]
 
     def status(self, on: str, off: str) -> str:
         ret = []
@@ -69,10 +69,10 @@ class MatrixBase:
         return "\n".join(ret)
 
     def __repr__(self) -> str:
-        return str(self.data)
+        return self.status("@", ".")
 
     def __str__(self) -> str:
-        return self.status("O", ".")
+        return repr(self)
 
 
 class Scanner(MatrixBase):
@@ -178,9 +178,10 @@ else:
         Control multiple daisy-chained max7219 LED matrix
         """
 
-        def __init__(self, serial: spi, cascaded: int = 1):
+        def __init__(self, port: int = 0, device: int = 0, cascaded: int = 1):
+            self.serial = spi(port=port, device=device, gpio=noop())
             self.cascaded = cascaded
-            self.device = max7219(serial, cascaded=cascaded)
+            self.device = max7219(self.serial, cascaded=cascaded)
 
             self.height = 8
             self.width = 8 * cascaded
@@ -202,13 +203,13 @@ else:
 
     class SingleMatrix(LEDmatrix):
         """
-        Control single LED matrix in MatrixChain
+        Control single, Nth LED matrix in MatrixChain
         """
 
-        def __init__(self, chain: MatrixChain, offset: int):
+        def __init__(self, chain: MatrixChain, N: int):
             self.chain = chain
-            self.offset = offset
-            self.data = np.array([row[offset:] for row in chain.data])
+            self.offset = N * 8
+            self.data = [row[self.offset : self.offset + 8] for row in chain.data]
 
         def flush(self):
             self.chain.flush()

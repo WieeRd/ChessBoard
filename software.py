@@ -3,7 +3,6 @@ import chess.engine
 import asyncio
 import logging
 import functools
-import numpy as np
 import gpiozero as gp
 import hardware as hw
 
@@ -57,19 +56,16 @@ class ChessBoard:
         timeout: float = 1.0,
     ):
         self.board = chess.Board()
-        self.states = np.array(
-            [
-                [GROUND] * 8,
-                [GROUND] * 8,
-                [EMPTY] * 8,
-                [EMPTY] * 8,
-                [EMPTY] * 8,
-                [EMPTY] * 8,
-                [GROUND] * 8,
-                [GROUND] * 8,
-            ],
-            dtype=np.uint8,
-        )
+        self.states = [
+            [GROUND] * 8,
+            [GROUND] * 8,
+            [EMPTY] * 8,
+            [EMPTY] * 8,
+            [EMPTY] * 8,
+            [EMPTY] * 8,
+            [GROUND] * 8,
+            [GROUND] * 8,
+        ]
 
         self.goodLED = goodLED
         self.warnLED = warnLED
@@ -84,7 +80,7 @@ class ChessBoard:
         # turn is occasionally set to None to block on_select()
         self.turn: Optional[chess.Color] = None
         # position of lifted(not detected) pieces
-        self.lifted: Tuple[Set[Pos], Set[Pos]] = set(), set()
+        self.lifted: Tuple[Set[Pos], Set[Pos]] = (set(), set())
         # error count (missing + misplace)
         self.errors: int = 0
         # when a move requires more than 2 actions,
@@ -110,11 +106,18 @@ class ChessBoard:
         good: Blue / warn: Red / both: Purple
         """
         char = ".BRP"
-        data = self.goodLED.data + self.warnLED.data * 2
+
+        good = self.goodLED.data
+        warn = self.warnLED.data
 
         ret = []
-        for row in reversed(data):  # because A1 is at bottom left
-            ret.append(" ".join(char[col] for col in row))
+        for y in range(7, -1, -1): # because A1 is at bottom left
+            row = []
+            for x in range(8):
+                data = good[y][x] + warn[y][x] * 2
+                row.append(char[data])
+            ret.append(" ".join(row))
+
         return ret
 
     def _state_str(self) -> List[str]:
@@ -231,6 +234,11 @@ class ChessBoard:
 
         Highlight possible moves with goodLED
         """
+        if self.AIselect and (x, y) != self.AIselect:
+            logger.debug("(x, y) != AIselect. Regarded as missing.")
+            self.on_missing(x, y)
+            return
+
         self.states[y][x] = SELECT
         self.select = (x, y)
 
@@ -448,9 +456,7 @@ class ChessBoard:
         if state == GROUND:
             color = self.color_at(x, y)
             self.lifted[color].add((x, y))
-            if self.AIselect and (x, y) != self.AIselect:
-                self.on_missing(x, y)
-            elif self.turn == color and len(self.lifted[color]) == 1:
+            if self.turn == color and len(self.lifted[color]) == 1:
                 self.on_select(x, y)
             else:
                 self.on_missing(x, y)
